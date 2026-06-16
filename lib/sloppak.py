@@ -539,7 +539,7 @@ def load_song(
                     _ALLOWED_LYRICS_SOURCES = {"xml", "notechart", "whisperx", "user"}
                     # Legacy alias: older manifests labelled note-chart-derived
                     # lyrics with the source format's name; normalise it.
-                    _LYRICS_SOURCE_ALIASES = {"notechart": "notechart"}
+                    _LYRICS_SOURCE_ALIASES = {"sng": "notechart"}
                     raw_source = manifest.get("lyrics_source")
                     if isinstance(raw_source, str):
                         raw_source = _LYRICS_SOURCE_ALIASES.get(raw_source, raw_source)
