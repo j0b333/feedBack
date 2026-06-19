@@ -462,7 +462,8 @@
             return body;
         }
 
-        async function finish() {
+        async function finish(finishOpts) {
+            finishOpts = finishOpts || {};
             overlay.remove();
             await fetchProgress();
             if (window.v3Progression && typeof window.v3Progression.refresh === 'function') {
@@ -471,6 +472,16 @@
             renderBadge();
             renderProfileScreen();
             if (window.slopsmith && window.slopsmith.emit) window.slopsmith.emit('v3:profile-updated', _profile);
+            // First-run only: after a genuine onboarding completion (not a
+            // profile edit), kick off the one-time home tour — but NOT when we're
+            // about to launch the diagnostic ("Play it now"), which navigates to
+            // the player; the tour would otherwise spotlight hidden home elements
+            // and steal focus. The Skip path stays on home, so it runs there.
+            // The engine's seen/dismissed state keeps it once; replayable from "?".
+            if (!editing && !finishOpts.launchingSong &&
+                window.v3OnboardingTour && typeof window.v3OnboardingTour.startFirstRun === 'function') {
+                try { window.v3OnboardingTour.startFirstRun(); } catch (e) { /* never block onboarding */ }
+            }
         }
 
         submit.addEventListener('click', async () => {
@@ -529,7 +540,7 @@
             // Step 4 — "Play it now": leave calibration pending (it completes
             // through the normal scored-stats path) and launch the diagnostic.
             const target = diagnosticFilename;
-            await finish();
+            await finish({ launchingSong: !!target });
             if (target && typeof window.playSong === 'function') window.playSong(target);
         });
 

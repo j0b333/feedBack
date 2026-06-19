@@ -127,7 +127,13 @@
     }
 
     function _unseenRelevant(screenId) {
-        return _relevantPlugins(screenId).filter(p => !hasSeen(p.id) && !hasDismissed(p.id));
+        // Drives the toast prompt + button "has-unseen" pulse. A tour registered
+        // with autoPrompt:false is excluded — it's started programmatically by
+        // its owner (e.g. the first-run home tour), so nagging via toast/pulse
+        // would double up. It still lists in the menu and runs on demand.
+        return _relevantPlugins(screenId).filter(p =>
+            !hasSeen(p.id) && !hasDismissed(p.id) &&
+            (_registry[p.id] ? _registry[p.id].autoPrompt !== false : true));
     }
 
     // ── Menu UI ────────────────────────────────────────────────────────────
@@ -615,7 +621,24 @@
             onStart: opts.onStart || null,
             onComplete: opts.onComplete || null,
             screens: Array.isArray(opts.screens) ? opts.screens.slice() : null,
+            // autoPrompt:false opts the tour OUT of the unseen toast + button
+            // pulse (it's driven programmatically by its owner, e.g. the
+            // first-run home tour started from onboarding). It still lists in the
+            // menu and runs via start(). Defaults to the legacy always-prompt.
+            autoPrompt: opts.autoPrompt !== false,
         };
+        // A `name` registers a CLIENT/CORE-owned tour — one that isn't a
+        // server-discovered plugin with a tour.json — into the consolidated menu
+        // catalog so it appears in the "?" menu. Never clobber a richer entry the
+        // /api/plugins pass already supplied for a real plugin of the same id.
+        if (opts.name && !_tourPlugins[pluginId]) {
+            _tourPlugins[pluginId] = {
+                id: pluginId,
+                name: opts.name,
+                has_screen: true,
+                is_viz: false,
+            };
+        }
         // If the override changes the relevance for the current screen, refresh.
         _updateMenuVisibility();
     }

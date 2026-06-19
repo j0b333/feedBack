@@ -134,7 +134,7 @@
             const bars = Array.from({ length: segs }, (_, i) =>
                 '<span class="flex-1 h-1.5 rounded-full ' + (i < filled ? 'bg-fb-primary' : 'bg-gray-500/40') + '"></span>').join('');
             continueCard =
-                '<button id="v3-continue" class="group relative text-left rounded-xl overflow-hidden border border-fb-border/50 bg-fb-card aspect-square self-start flex flex-col justify-end">' +
+                '<button id="v3-continue" data-tour="continue" class="group relative text-left rounded-xl overflow-hidden border border-fb-border/50 bg-fb-card aspect-square self-start flex flex-col justify-end">' +
                 songArt(cont.art_url, 'absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-70 transition') +
                 '<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>' +
                 tuningChip(cont.tuning_name, 'absolute top-3 right-3') +
@@ -146,7 +146,7 @@
                 '<span class="absolute top-3 left-3 text-fb-text/80 group-hover:text-fb-text">▶</span></button>';
         } else if (pick) {
             continueCard =
-                '<button id="v3-pick" data-fn="' + esc(pick.filename) + '" class="group relative text-left rounded-xl overflow-hidden border border-fb-border/50 bg-fb-card aspect-square self-start flex flex-col justify-end">' +
+                '<button id="v3-pick" data-tour="continue" data-fn="' + esc(pick.filename) + '" class="group relative text-left rounded-xl overflow-hidden border border-fb-border/50 bg-fb-card aspect-square self-start flex flex-col justify-end">' +
                 songArt(libArtUrl(pick), 'absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-70 transition') +
                 '<div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>' +
                 tuningChip(pick.tuning_name, 'absolute top-3 right-3') +
@@ -157,7 +157,7 @@
                 '<span class="absolute top-3 left-3 text-fb-text/80 group-hover:text-fb-text">▶</span></button>';
         } else {
             continueCard =
-                '<div class="rounded-xl border border-fb-border/50 bg-fb-card/60 aspect-square self-start flex flex-col items-center justify-center text-center p-4">' +
+                '<div data-tour="continue" class="rounded-xl border border-fb-border/50 bg-fb-card/60 aspect-square self-start flex flex-col items-center justify-center text-center p-4">' +
                 '<div class="text-fb-textDim text-sm mb-3">Pick a song to get started</div>' +
                 '<button id="v3-continue-pick" class="bg-fb-card hover:bg-fb-card/70 border border-fb-border/50 text-fb-text text-sm px-4 py-2 rounded-md">Browse library</button></div>';
         }
@@ -188,7 +188,7 @@
                 '<a href="' + esc(changelogUrl) + '" target="_blank" rel="noopener" class="text-fb-primary hover:text-fb-primaryHi">Patch Notes for ' + esc(ver) + '</a>?</p>' : '') +
             // Featured grid: hero + continue
             '<div class="grid lg:grid-cols-3 gap-6 mt-6">' +
-            '<div class="lg:col-span-2 relative rounded-xl overflow-hidden min-h-[480px] flex items-center bg-fb-bg">' +
+            '<div id="v3-hero" class="lg:col-span-2 relative rounded-xl overflow-hidden min-h-[480px] flex items-center bg-fb-bg">' +
             // Hero artwork (neon note-highway), right-anchored. Placeholder
             // cropped from the design mock — swap static/v3/brand/hero.png for
             // the designer's high-res original (same path) when available.

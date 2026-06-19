@@ -371,7 +371,11 @@
         _registerProvider({
             providerId: 'web-midi',
             label: 'Web MIDI',
-            participantId: 'core.midi-input',
+            // Distinct from the domain owner's participant id ('core.midi-input').
+            // unregisterProvider() unregisters the provider's participant, so
+            // sharing the owner's id would tear the whole domain's owner down on
+            // a provider swap/hot-reload, leaving midi-input with no owner.
+            participantId: 'core.midi-input.web-midi',
             enumerate: async () => {
                 access = await navigator.requestMIDIAccess({ sysex: false });
                 try { access.onstatechange = () => { _discover(); }; } catch (_) { /* best-effort */ }

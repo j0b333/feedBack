@@ -291,7 +291,7 @@
         const host = document.getElementById('v3-badge-instrument');
         if (!host) return;
         host.innerHTML =
-            '<div class="relative">' +
+            '<div id="v3-instrument-wrap" class="relative">' +
             '<button type="button" data-inst-toggle title="Instrument: ' + esc(settings.string_count + '-str ' + tuningLabel()) + '" ' +
             'class="bg-fb-card border border-fb-border/50 rounded-2xl h-[92px] w-16 flex flex-col items-center justify-center gap-2 hover:ring-1 hover:ring-fb-primary/40 transition">' +
             guitarIcon +

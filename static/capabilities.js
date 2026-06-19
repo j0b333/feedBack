@@ -816,15 +816,18 @@
     }
 
     function _withTimeout(promise, timeoutMs, participant) {
-        return Promise.race([
-            promise,
-            new Promise(resolve => {
-                setTimeout(() => resolve({
-                    outcome: 'failed',
-                    reason: `Handler ${participant.pluginId} timed out after ${timeoutMs} ms`,
-                }), timeoutMs);
-            }),
-        ]);
+        // Capture + clear the timer once the race settles — otherwise a handler
+        // that resolves first leaves a live setTimeout (up to timeoutMs) that
+        // keeps the event loop alive and, for long overrides (MIDI permission
+        // commands at 15s), accumulates delayed callbacks across repeated calls.
+        let timer;
+        const timeout = new Promise(resolve => {
+            timer = setTimeout(() => resolve({
+                outcome: 'failed',
+                reason: `Handler ${participant.pluginId} timed out after ${timeoutMs} ms`,
+            }), timeoutMs);
+        });
+        return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
     }
 
     function _normalizeDecision(participant, result) {
