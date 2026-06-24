@@ -445,6 +445,21 @@ function _shortcutDispatchBlocked(e) {
     // the popover's own keydown listener) — suppress the player-scope
     // "back to library" Esc so the user doesn't get bounced out of the player.
     if (e.key === 'Escape' && _sectionPracticePopoverOpen()) return true;
+    // Space on the player screen should always play/pause, even if focus is on a
+    // sidebar nav link, player rail button, popover control, or any other
+    // interactive element — the shortcut dispatcher calls preventDefault so the
+    // focused element won't also activate. Two exceptions keep native Space:
+    // text inputs (already exempted above), and focus inside a true modal
+    // dialog (role="dialog" aria-modal="true", or a .feedBack-modal overlay)
+    // layered over the player — a modal traps interaction, so Space must reach
+    // its focused control (e.g. the Close button) rather than toggle playback
+    // behind it. Non-modal player popovers/toasts (loop A/B, arrangement pin,
+    // role="dialog" aria-modal="false") are not modals and stay covered.
+    if (_isSpaceKey(e) && _getCurrentContext().isPlayer &&
+        !(e.target && e.target.closest &&
+          e.target.closest('[role="dialog"][aria-modal="true"], .feedBack-modal'))) {
+        return false;
+    }
     return _isInsideInteractiveControl(e.target);
 }
 
