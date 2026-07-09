@@ -2596,10 +2596,14 @@
     const FRET_NUMBER_GHOST_SCOPE_IDS = ['chords', 'all'];
 
     function _bgPanelKey(canvas) {
-        // Defensive on the splitscreen global name (rename in flight) so per-panel
-        // background settings keep resolving the same panel as _freeCamFor().
+        // Defensive on the splitscreen global name (rename in flight) AND throw-safe
+        // on panelIndexFor — same as _freeCamFor — so a misbehaving splitscreen
+        // build can't take down background-settings resolution. Falls back to 'main'.
         const ss = window.feedBackSplitscreen || window.slopsmithSplitscreen;
-        const idx = (ss && typeof ss.panelIndexFor === 'function') ? ss.panelIndexFor(canvas) : null;
+        let idx = null;
+        if (ss && typeof ss.panelIndexFor === 'function') {
+            try { idx = ss.panelIndexFor(canvas); } catch (e) { idx = null; }
+        }
         return (idx == null) ? 'main' : 'panel' + idx;
     }
 
