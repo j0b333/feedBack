@@ -4858,9 +4858,37 @@ window.jucePlayer = jucePlayer;
 // on a dead JUCE backing transport. This watcher migrates the loaded song
 // between the two paths whenever the engine's running state changes, preserving
 // playback position and play/pause state.
+// [asio-diag] global error tap: the 2026-07-11 tester log showed an uncaught
+// SyntaxError with no source location and the routing watcher/feeder never
+// installing — an error event carries filename:line even for parse errors in
+// other scripts, which console output does not. Gated on the desktop --debug
+// flag via window._asioDiagEnabled (installed just below; resolves async, so
+// errors thrown in the first ~second of a debug run may be missed — the
+// stale-cache class of failure reproduces on every later tick anyway).
+window.addEventListener('error', (e) => {
+    if (!window._asioDiagEnabled?.()) return;
+    console.warn('[asio-diag] uncaught-error:', e.message,
+        'at', (e.filename || '<unknown>') + ':' + (e.lineno || 0) + ':' + (e.colno || 0));
+});
+window.addEventListener('unhandledrejection', (e) => {
+    if (!window._asioDiagEnabled?.()) return;
+    const r = e.reason;
+    console.warn('[asio-diag] unhandled-rejection:',
+        (r && (r.name + ': ' + r.message)) || String(r));
+});
+
 (function _installJuceEngineRoutingWatcher() {
     const juceApi = window.feedBackDesktop?.audio;
-    if (!juceApi || typeof juceApi.isAudioRunning !== 'function') return;
+    if (!juceApi || typeof juceApi.isAudioRunning !== 'function') {
+        // Desktop bridge present but audio API incomplete — the whole
+        // exclusive reroute chain is dead and this line is the only witness.
+        // (Docker sphere has no bridge at all: stay silent, nothing to
+        // diagnose there and no debug flag to gate on.)
+        if (window.feedBackDesktop) {
+            console.log('[asio-diag] routing watcher NOT installed (audio api incomplete)');
+        }
+        return;
+    }
 
     let _rerouteInFlight = false;
     // URL that JUCE's loadBackingTrack *explicitly rejected* (ok === false —
@@ -4889,7 +4917,13 @@ window.jucePlayer = jucePlayer;
     // renderer-bus feeder below via window._asioDiagEnabled.
     let _asioDiag = false;
     if (typeof juceApi.debugEnabled === 'function') {
-        juceApi.debugEnabled().then((v) => { _asioDiag = !!v; }).catch(() => {});
+        juceApi.debugEnabled().then((v) => {
+            _asioDiag = !!v;
+            // Deferred install line: the flag resolves async, so logging at
+            // IIFE entry would race it. Change-detection isn't needed — this
+            // runs once per page load.
+            if (_asioDiag) console.log('[asio-diag] routing watcher installed');
+        }).catch(() => {});
     }
     window._asioDiagEnabled = () => _asioDiag;
     async function _outputIsExclusive() {
@@ -5311,7 +5345,23 @@ window.jucePlayer = jucePlayer;
 (function _installRendererBusFeeder() {
     const api = window.feedBackDesktop?.audio;
     if (!api || typeof api.setRendererBus !== 'function'
-             || typeof api.pushRendererAudio !== 'function') return;
+             || typeof api.pushRendererAudio !== 'function') {
+        // Silent in the Docker sphere (no bridge, no debug flag); a desktop
+        // bridge missing the bus API is the diagnostic case.
+        if (window.feedBackDesktop) {
+            console.log('[asio-diag] renderer-bus feeder NOT installed (api=' + !!api
+                + ' setRendererBus=' + typeof api?.setRendererBus
+                + ' pushRendererAudio=' + typeof api?.pushRendererAudio + ')');
+        }
+        return;
+    }
+    // Deferred like the watcher's install line: gate on the async debug flag.
+    if (typeof api.debugEnabled === 'function') {
+        api.debugEnabled().then((v) => {
+            if (v) console.log('[asio-diag] renderer-bus feeder installed (loopback-capable='
+                + (typeof window.navigator?.mediaDevices?.getDisplayMedia === 'function') + ')');
+        }).catch(() => {});
+    }
 
     const TAP_WORKLET = `
         class FeedbackBusTap extends AudioWorkletProcessor {
@@ -5381,15 +5431,94 @@ window.jucePlayer = jucePlayer;
         if (_elCtx) return;
         const el = document.getElementById('audio');
         if (!el) throw new Error('no core audio element');
-        _elCtx = new AudioContext();
-        _elSource = _elCtx.createMediaElementSource(el);
-        _elSource.connect(_elCtx.destination);
-        _elTap = _makeTap(_elCtx);
-        await _elTap.attach(_elSource);
+        // Assign the module state ONLY after the whole chain succeeded.
+        // createMediaElementSource throws InvalidStateError when another
+        // consumer (highway_3d's analyser tap) already owns the element's
+        // one-shot source — assigning _elCtx before that throw poisoned every
+        // later tick into `_elTap.active` TypeErrors (tester log 2026-07-11)
+        // while the song kept playing on the default device.
+        const ctx = new AudioContext();
+        let source, tap;
+        try {
+            source = ctx.createMediaElementSource(el);
+            source.connect(ctx.destination);
+            tap = _makeTap(ctx);
+            await tap.attach(source);
+        } catch (e) {
+            try { await ctx.close(); } catch (_) { /* already closed */ }
+            throw e;
+        }
+        _elCtx = ctx; _elSource = source; _elTap = tap;
+    }
+
+    // ── Whole-app loopback capture ───────────────────────────────────────────
+    // Preferred mode: one getDisplayMedia frame-audio capture covers EVERY
+    // sound the app makes (song, previews, UI) — no per-surface taps, so
+    // plugin-private AudioContexts (song-preview, future plugins) survive
+    // exclusive/ASIO output too. The desktop main process answers the request
+    // with this window's own frame (frame-scoped — no other apps' audio).
+    // Local playback is silenced via the suppressLocalAudioPlayback track
+    // constraint, with a page-mute IPC fallback (capture taps frame audio
+    // before the output mute, so a muted page still feeds the stream).
+    let _lbStream = null, _lbCtx = null, _lbTap = null, _lbPageMuted = false;
+    let _loopbackUnavailable = false;   // sticky: probe once, then fall back
+    async function _engageLoopback() {
+        const stream = await navigator.mediaDevices.getDisplayMedia({
+            video: true,
+            audio: { suppressLocalAudioPlayback: true },
+        });
+        for (const t of stream.getVideoTracks()) t.stop();   // required, unused
+        const track = stream.getAudioTracks()[0];
+        if (!track) {
+            for (const t of stream.getTracks()) t.stop();
+            throw new Error('no loopback audio track');
+        }
+        try {
+            // Fresh context per session (not reused) so teardown's close()
+            // fully releases the tap worklet node — see _teardownLoopback.
+            _lbCtx = new AudioContext();
+            if (_lbCtx.state !== 'running') await _lbCtx.resume().catch(() => {});
+            const source = _lbCtx.createMediaStreamSource(stream);
+            const tap = _makeTap(_lbCtx);
+            await tap.attach(source);
+            const suppressed = track.getSettings?.().suppressLocalAudioPlayback === true;
+            if (!suppressed && typeof api.setPageMuted === 'function') {
+                _lbPageMuted = (await api.setPageMuted(true)) === true;
+            }
+            if (window._asioDiagEnabled?.()) {
+                console.log('[asio-diag] loopback: suppressed=', suppressed,
+                    'pageMuted=', _lbPageMuted, 'rate=', _lbCtx.sampleRate);
+            }
+            await api.setRendererBus(true, 1.0);
+            tap.active = true;
+            _lbStream = stream; _lbTap = tap;
+            _mode = 'loopback';
+            console.log('[renderer-bus] engaged: app loopback → engine bus');
+        } catch (e) {
+            for (const t of stream.getTracks()) t.stop();
+            throw e;
+        }
+    }
+    async function _teardownLoopback() {
+        if (_lbTap) _lbTap.active = false;
+        if (_lbStream) for (const t of _lbStream.getTracks()) t.stop();
+        _lbStream = null; _lbTap = null;
+        // Close the capture context so its tap worklet node is released. The
+        // context is per-session (not reused): without this, each exclusive⇄
+        // shared switch orphaned a live worklet on a long-lived context.
+        if (_lbCtx) {
+            try { await _lbCtx.close(); } catch (_) { /* already closed */ }
+            _lbCtx = null;
+        }
+        if (_lbPageMuted && typeof api.setPageMuted === 'function') {
+            try { await api.setPageMuted(false); } catch (_) { /* engine gone */ }
+        }
+        _lbPageMuted = false;
     }
 
     // ── Engagement state machine ─────────────────────────────────────────────
-    // 'off' | 'element' | 'stems'
+    // 'off' | 'loopback' | 'element' | 'stems' (element/stems = fallback when
+    // loopback capture is unavailable: old desktop main, denied capture)
     let _mode = 'off';
     let _stemsGraph = null;   // { context, masterNode } snapshot while engaged
     let _stemsTap = null;
@@ -5414,7 +5543,9 @@ window.jucePlayer = jucePlayer;
         const prev = _mode;
         _mode = 'off';
         try { await api.setRendererBus(false, 0); } catch (_) { /* engine gone */ }
-        if (prev === 'element' && _elCtx) {
+        if (prev === 'loopback') {
+            await _teardownLoopback();
+        } else if (prev === 'element' && _elCtx) {
             _elTap.active = false;
             await _setSink(_elCtx, false).catch(() => {});
         } else if (prev === 'stems' && _stemsGraph) {
@@ -5473,9 +5604,20 @@ window.jucePlayer = jucePlayer;
 
             let want = 'off';
             if (running && exclusive) {
-                if (stems) want = 'stems';
+                // Loopback covers ALL app audio (song, previews, UI), so it
+                // engages for the whole exclusive session — not just while a
+                // song is loaded. Per-surface modes remain as fallback when
+                // loopback capture is unavailable (old desktop main without
+                // the display-media handler, capture denied).
+                if (!_loopbackUnavailable) want = 'loopback';
+                else if (stems) want = 'stems';
                 else if (elementSong) want = 'element';
             }
+            // Song audio riding the native transport must not ALSO ride the
+            // loopback (double-carry into the same engine output). The native
+            // transport plays from the engine, not the page, so page loopback
+            // never hears it — no conflict; loopback stays engaged for
+            // previews/UI while the transport owns the song.
 
             // [asio-diag] full decision vector, change-gated (500ms poll —
             // steady state must not flood the buffer). This is the feeder-side
@@ -5487,6 +5629,7 @@ window.jucePlayer = jucePlayer;
                     + ' stems=' + !!stems + ' songAudio=' + !!songAudio
                     + ' juceMode=' + !!window._juceMode
                     + ' elementSong=' + elementSong
+                    + ' loopbackUnavailable=' + _loopbackUnavailable
                     + ' want=' + want + ' mode=' + _mode;
                 if (d !== window._lastRendererBusDecision) {
                     window._lastRendererBusDecision = d;
@@ -5498,12 +5641,33 @@ window.jucePlayer = jucePlayer;
             const stemsGraphChanged = _mode === 'stems' && stems !== _stemsGraph;
             if (want !== _mode || stemsGraphChanged) {
                 await _disengage();
-                if (want === 'stems') await _engageStems(stems);
-                else if (want === 'element') await _engageElement();
+                try {
+                    if (want === 'loopback') await _engageLoopback();
+                    else if (want === 'stems') await _engageStems(stems);
+                    else if (want === 'element') await _engageElement();
+                } catch (e) {
+                    if (want === 'loopback') {
+                        // Capture unavailable (no handler in an old desktop
+                        // main, permission denied) — remember and fall back to
+                        // the per-surface modes on the next tick.
+                        _loopbackUnavailable = true;
+                        console.warn('[renderer-bus] loopback capture unavailable — falling back to surface taps:', e);
+                    }
+                    throw e;
+                }
             }
         } catch (e) {
-            console.warn('[renderer-bus] reevaluate failed (will retry):', e);
+            // Explicit name/message/stack head — the console-message forward
+            // stringifies a DOMException to the useless "[object DOMException]".
+            console.warn('[renderer-bus] reevaluate failed (will retry):',
+                (e && e.name ? e.name + ': ' + e.message : String(e)),
+                (e && e.stack ? '| ' + String(e.stack).split('\n')[1] : ''));
             _mode = 'off';
+            // A partial engage may have left the bus enabled with no producer
+            // and the page muted — undo both so a failed tick can't strand
+            // audio in silence until the next successful engage.
+            try { await api.setRendererBus(false, 0); } catch (_) { /* engine gone */ }
+            await _teardownLoopback().catch(() => {});
         } finally {
             _busy = false;
         }
