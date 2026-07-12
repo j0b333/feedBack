@@ -109,7 +109,20 @@
 
     function _connect(paneId) {
         if (conns.has(paneId)) _disconnect(paneId);   // a reloaded pane window says hello again
-        conns.set(paneId, { streams: new Map(), pending: null, rafId: null });
+        const entry = panes._entry(paneId);
+
+        // Broadcast EVERY change to the authoritative store, whoever made it —
+        // not just the ones a pane asked for. A plugin's main-realm code is often
+        // the real authority (it clamps, it persists, it owns the rig), and when
+        // it corrects or seeds a value through panes.state(id).set(), the pane
+        // window has to see that too. Subscribing here means the pane's own write
+        // is echoed by the same path that carries a main-realm write, so there is
+        // exactly one way state reaches a pane, and it cannot drift.
+        const unsubState = entry ? entry.state.subscribe((_all, change) => {
+            if (change) send('state', paneId, change);
+        }) : null;
+
+        conns.set(paneId, { streams: new Map(), pending: null, rafId: null, unsubState });
         const spec = panes.get(paneId);
         if (spec) spec.events.forEach(_hookEvent);
     }
@@ -118,6 +131,7 @@
         const conn = conns.get(paneId);
         if (!conn) return;
         conn.streams.forEach((unsub) => unsub());
+        if (conn.unsubState) conn.unsubState();
         if (conn.rafId != null) cancelAnimationFrame(conn.rafId);
         conns.delete(paneId);
         const spec = panes.get(paneId);
@@ -183,10 +197,11 @@
             case 'state': {
                 const entry = panes._entry(paneId);
                 if (!entry) return;
-                // The main realm is authoritative: apply, then echo to everyone.
-                // A pane's own optimistic paint is corrected by the echo, so two
-                // panes racing on one key converge instead of diverging.
-                if (entry.state.set(p.path, p.value)) send('state', paneId, { path: p.path, value: p.value });
+                // The main realm is authoritative: a pane's write is a request. We
+                // apply it here; the store subscription in _connect() does the
+                // echoing, so a pane's optimistic paint is corrected by exactly the
+                // same path that carries a main-realm write.
+                entry.state.set(p.path, p.value);
                 break;
             }
 

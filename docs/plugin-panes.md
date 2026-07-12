@@ -150,6 +150,42 @@ one rule above.
 
 ---
 
+## Driving a pane from the main realm — `panes.state(id)`
+
+Most plugins with a pane are the **authority** over what the pane controls: they
+clamp values, persist presets, emit events, and own the audio graph or the camera
+rig. Such a plugin should not have core splat the pane's values somewhere — it
+should *apply them itself*.
+
+`panes.state(id)` is the main realm's handle on an open pane's store:
+
+```js
+feedBack.on('panes:opened', (e) => {
+    if (e.detail.id !== 'camera_director') return;
+    const state = feedBack.panes.state('camera_director');
+
+    // Seed it, so the pane opens showing the live camera, not defaults.
+    AXES.forEach((k) => state.set(k, myApi.getAxis(k)));
+
+    // …and apply whatever the pane sends back, through your own API — which
+    // clamps, persists, and tells the rest of your plugin.
+    state.subscribe((all, change) => {
+        if (!change) return;
+        myApi.setAxis(change.path, change.value);
+    });
+});
+```
+
+The pane stays realm-agnostic (it only ever touches `ctx.state`), and your plugin
+remains the single source of truth. **Every write to the store is broadcast to the
+pane window**, whichever realm made it — so a value your code clamps or corrects
+shows up in the pane immediately, and there is exactly one way state reaches a pane.
+
+Guard against a write you just made coming straight back (compare against your
+current value before applying), or a clamp will ping-pong.
+
+Returns `null` when the pane is closed.
+
 ## `mirrorGlobal` — for panes that drive a plain global
 
 The 3D highways read their free camera from `window.__h3dCamCtl` once per frame.

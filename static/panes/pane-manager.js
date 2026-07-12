@@ -330,6 +330,29 @@
         // participate without a private import.
         registerHost,
 
+        // The main realm's handle on an open pane's state.
+        //
+        // `mirrorGlobal` covers the case where a pane drives a plain global that
+        // some renderer reads. It does NOT cover the far more common one: a
+        // plugin whose main-realm code is the authority — it clamps, it persists,
+        // it emits events, it owns the audio graph or the camera rig — and which
+        // therefore needs to APPLY the pane's values itself rather than have core
+        // splat them somewhere.
+        //
+        // Such a plugin subscribes here on `panes:opened`, seeds the store with
+        // its current values, and applies whatever comes back. The pane stays
+        // realm-agnostic (it only ever touches ctx.state) and the plugin keeps
+        // being the single source of truth. Returns null when the pane is closed.
+        state: (id) => {
+            const entry = open.get(id);
+            return entry ? {
+                get: (path) => entry.state.get(path),
+                set: (path, value) => entry.state.set(path, value),
+                all: () => entry.state.all(),
+                subscribe: (fn) => entry.state.subscribe(fn),
+            } : null;
+        },
+
         // Host-internal. pane-hub.js serves a pop-out realm from the
         // authoritative state store, which only lives here. Not part of the pane
         // API — panes must never reach for this.
