@@ -62,6 +62,18 @@ panel lazily on first use, or rebuild it wholesale when something changes (Camer
 Director rebuilds its panel on every mode change). Asking for it when we need it
 means we always move the live one.
 
+**If you rebuild your panel, re-attach the chip.** Rebuilding takes the chip with
+it. `attachChip()` returns a `detach()`; call it before re-attaching, and again in
+your teardown — otherwise you leave a stub pointing at DOM that no longer exists.
+
+```js
+if (chipDetach) chipDetach();
+chipDetach = panes.attachChip(panel, PANE_ID, { header: toolsEl });
+```
+
+Re-attaching is safe while the pane is popped out: the chip reconciles against the
+pane's real state, so a panel rebuilt mid-pop-out stays correctly stubbed.
+
 ### The one thing core changes about your element
 
 `.fb-paned` is added while the pane is out, and it neutralises **placement only**:
