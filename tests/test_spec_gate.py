@@ -7,7 +7,6 @@ classification, the closed allowlist, and the duplicate/malformed-entry
 rejections. If one of these fails, the spec's protection regressed.
 """
 import importlib.util
-import sys
 import textwrap
 from pathlib import Path
 
