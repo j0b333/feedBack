@@ -12,9 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   an open format with its own repo, normative spec, JSON Schemas, and reference validator — but nothing
   stopped core from reading a manifest key the spec never defined, which is exactly what happened with
   `original_audio` (#583 → #933). `tools/check_spec_conformance.py` now enforces three surface properties
-  in CI: (1) **key-coverage** — every manifest key core reads is declared in the spec's
+  in CI: (1) **key-coverage** — every manifest key core reads *or writes* is declared in the spec's
   `manifest.schema.json`, found by walking the AST of `lib/sloppak.py`, `lib/enrichment.py`, and
-  `lib/songmeta.py`; (2) **forward** — core's `load_song()` ingests every example pack the spec ships;
+  `lib/songmeta.py` (writes are gated too, and reported separately: a key core writes lands in every pack
+  we emit, so an undeclared one seeds the ecosystem with non-spec data); (2) **forward** — core's
+  `load_song()` ingests every example pack the spec ships;
   (3) **reverse** — every pack committed here passes the spec's own `tools/validate.py` (7/7 pass today).
   The spec is pinned by SHA in `.feedpak-spec-ref` so a change over there can't redden an unrelated PR
   here; bump it in its own PR, and a red result is the signal that core doesn't satisfy the new spec.

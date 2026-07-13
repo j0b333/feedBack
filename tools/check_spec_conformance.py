@@ -130,12 +130,20 @@ def load_exceptions() -> dict[str, str]:
         if not key or not issue:
             _fail(f"{EXCEPTIONS_FILE.name}: every exception needs both 'key' and 'issue'")
             sys.exit(1)
+        # A duplicate would silently take the last issue link, quietly retargeting
+        # the debt this file exists to track. Fail instead.
+        if key in out:
+            _fail(
+                f"{EXCEPTIONS_FILE.name}: '{key}' is listed more than once. "
+                f"Keep one entry per key so the tracking issue is unambiguous."
+            )
+            sys.exit(1)
         out[key] = issue
     return out
 
 
 def check_key_coverage(spec: Path) -> bool:
-    """Layer 1 — core must not read a manifest key the spec does not declare."""
+    """Layer 1 — core must not read or write a manifest key the spec does not declare."""
     schema = json.loads((spec / "schemas" / "manifest.schema.json").read_text(encoding="utf-8"))
     declared = set(schema.get("properties") or {})
     if not declared:
@@ -209,8 +217,17 @@ def check_forward(spec: Path) -> bool:
     if not examples_dir.is_dir():
         _fail(f"{examples_dir} is missing — wrong path or bad checkout?")
         return False
+    # rglob, not iterdir: the contract is "every example pack the spec ships", so
+    # a pack nested under examples/<group>/ must not slip through.
+    #
+    # Deliberately NOT filtered by is_file(): a feedpak is dual-form — a zip
+    # (`foo.feedpak`) *or* a directory (`foo.feedpak/`) — and the spec's own
+    # examples ship as directories today. An is_file() guard here would silently
+    # match zero packs. Matching on the suffix covers both forms, and rglob does
+    # not smuggle in a pack's innards because files inside a pack don't carry a
+    # pack suffix.
     examples = sorted(
-        p for p in examples_dir.iterdir()
+        p for p in examples_dir.rglob("*")
         if p.suffix in (".feedpak", ".sloppak")
     )
     if not examples:
@@ -218,7 +235,14 @@ def check_forward(spec: Path) -> bool:
         return False
 
     sys.path.insert(0, str(REPO / "lib"))
-    import sloppak  # noqa: E402  (path must be set first — flat imports, no package)
+    try:
+        import sloppak  # noqa: E402  (path must be set first — flat imports, no package)
+    except Exception as e:
+        _fail(
+            f"could not import core's sloppak loader ({type(e).__name__}: {e}). "
+            f"Are requirements.txt deps installed?"
+        )
+        return False
 
     ok = True
     with tempfile.TemporaryDirectory() as tmp:
