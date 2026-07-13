@@ -121,12 +121,11 @@ Known, and worth fixing in follow-ups rather than blocking on:
   instead of inferring.
 - **Layer 1 covers top-level keys only.** Nested structure (`arrangements[].file`, `.id`, `.notation`) isn't
   checked. Extending to it means walking the schema's `$ref` subschemas.
-- **Layer 1 recognises `get`, `setdefault`, and subscripts** as key access. `update()` and `pop()` aren't
-  used against a feedpak manifest anywhere in the tree, so they're deliberately not special-cased rather than
-  speculatively handled. `readers-complete` reuses the same scanner (`keys_touched()`), so this blind spot is
-  shared, not doubled: a module using only unrecognised access forms would evade both. Keys passed as literal
-  *call arguments* to helpers (`_gap_fill_manifest_absent(manifest, "album")` in `lib/routers/song.py`) are
-  likewise unseen.
+- **Layer 1 recognises `get`, `setdefault`, subscripts, and the known gap-fill helper** as key access.
+  `update()` and `pop()` aren't used against a feedpak manifest anywhere in the tree, so they're deliberately
+  not special-cased rather than speculatively handled. `readers-complete` reuses the same scanner
+  (`keys_touched()`), so this blind spot is shared, not doubled: a module using only unrecognised access forms
+  would evade both.
 - **Layer 4 can't catch unknown keys**, because `manifest.schema.json` sets `additionalProperties: true` and
   the reference validator deliberately "treats unknown keys/files as forward-compatible". Fixing this
   properly belongs in the spec (tighten the schema, or give the validator a `--strict` mode). Until then,

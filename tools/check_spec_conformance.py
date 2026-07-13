@@ -78,6 +78,12 @@ FEEDPAK_SIGNALS = re.compile(r"import sloppak|from sloppak|load_manifest|manifes
 # name list alone silently misses real readers.
 MANIFEST_VARS = {"manifest", "mf"}
 
+# Helper functions that take `(manifest, "literal_key", ...)` and read the
+# manifest for that key. Keep this narrow: only helpers whose first argument is
+# the manifest dict and whose second argument is a top-level manifest key belong
+# here.
+MANIFEST_KEY_READ_HELPERS = {"_gap_fill_manifest_absent"}
+
 # Packs committed to this repo, checked against the spec's reference validator.
 PACK_GLOBS = ["content/starter/*.feedpak", "docs/**/*.sloppak", "docs/**/*.feedpak"]
 
@@ -171,6 +177,16 @@ def keys_touched(path: Path) -> tuple[set[str], set[str]]:
         ):
             bucket = writes if node.func.attr == "setdefault" else reads
             bucket.add(node.args[0].value)
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in MANIFEST_KEY_READ_HELPERS
+            and len(node.args) >= 2
+            and _is_manifest_receiver(node.args[0], receivers)
+            and isinstance(node.args[1], ast.Constant)
+            and isinstance(node.args[1].value, str)
+        ):
+            reads.add(node.args[1].value)
         elif (
             isinstance(node, ast.Subscript)
             and _is_manifest_receiver(node.value, receivers)

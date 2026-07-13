@@ -90,6 +90,18 @@ def test_non_literal_keys_are_ignored(tmp_path):
     assert reads == set() and writes == set()
 
 
+def test_manifest_key_read_helper_is_seen(tmp_path):
+    # lib/routers/song.py uses this helper for gap-fill proposals. If helpers
+    # are invisible, adding a new literal key through that path bypasses both
+    # key-coverage and readers-complete.
+    reads, writes = _touch(
+        tmp_path,
+        '_gap_fill_manifest_absent(manifest, "album")\n'
+        '_gap_fill_manifest_absent(manifest, dynamic_key)\n',
+    )
+    assert reads == {"album"} and writes == set()
+
+
 # ------------------------------------------------------------ exceptions file
 
 def test_duplicate_exception_key_is_rejected():
