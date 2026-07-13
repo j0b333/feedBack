@@ -10,12 +10,17 @@ being a fully-working pack, and the format's real definition migrates into our
 source tree. See #933 for the instance that motivated this gate.
 
 We cannot mechanically prove core *interprets* a key the way the spec means. We
-can prove three surface properties, and those cover the drift that actually
+can prove four surface properties, and those cover the drift that actually
 happens:
 
-  1. key-coverage  — every manifest key core reads is declared by the spec.
-  2. forward       — core ingests the spec's own example packs.
-  3. reverse       — packs committed here satisfy the spec's reference validator.
+  1. key-coverage    — every manifest key core reads OR WRITES is declared by the
+                       spec. (Guarded by check_readers_complete(), so the list of
+                       scanned modules cannot quietly fall behind the codebase.)
+  2. allowlist-closed— feedpak-spec-exceptions.yml never grows. It grandfathers
+                       keys that predate this gate; it is not a way to merge a
+                       new one. The only route for a new key is the FEP process.
+  3. forward         — core ingests the spec's own example packs.
+  4. reverse         — packs committed here satisfy the spec's reference validator.
 
 Dev/CI tooling only: never imported on the serve or Docker path (constitution
 Principle I — same category as scripts/build-tailwind.sh). `jsonschema` is
@@ -31,6 +36,7 @@ from __future__ import annotations
 import argparse
 import ast
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -38,15 +44,33 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parent.parent
 
-# Modules that read a feedpak manifest dict. Listed explicitly rather than
-# globbed so that adding a new reader is a deliberate act that shows up in
-# review — a new reader is exactly when key drift gets introduced. A missing
-# file here is a hard error, so a rename cannot silently disable the scan.
+# Modules that read or write a feedpak manifest dict. Explicit rather than
+# globbed, because `manifest` is an overloaded name in this codebase: the
+# loose-folder format (lib/loosefolder.py) and the diagnostics bundle
+# (lib/diagnostics_bundle.py) both have their own unrelated `manifest`, and
+# scanning those would flag *their* keys as feedpak drift.
+#
+# A hand-maintained list is itself a blind spot, so check_readers_complete()
+# below re-derives the set and fails if this list has fallen behind. A missing
+# file here is a hard error too, so a rename cannot silently disable the scan.
 READERS = [
     "lib/sloppak.py",
     "lib/enrichment.py",
     "lib/songmeta.py",
+    "lib/gp2notation.py",        # rewrites manifest.yaml; stamps feedpak_version
+    "lib/routers/ws_highway.py", # reads `authors` off a feedpak manifest
 ]
+
+# Where check_readers_complete() looks for modules READERS may have missed.
+READER_SEARCH = ["lib/**/*.py", "server.py"]
+
+# A module is handling a *feedpak* manifest (rather than some other manifest) if
+# it shows one of these signals. lib/loosefolder.py and lib/diagnostics_bundle.py
+# score zero on all of them, which is what keeps their keys out of the scan.
+FEEDPAK_SIGNALS = re.compile(r"import sloppak|from sloppak|load_manifest|manifest\.yaml|feedpak")
+
+# Does this module touch manifest keys at all?
+KEY_OPS = re.compile(r"(manifest|mf)\.(get|setdefault)\(|(manifest|mf)\[")
 
 # Locals that hold a manifest dict. The loaders use a uniform idiom
 # (`manifest.get("key")`), so binding by name is sufficient today. See
@@ -104,13 +128,17 @@ def keys_touched(path: Path) -> tuple[set[str], set[str]]:
         if (
             isinstance(node, ast.Call)
             and isinstance(node.func, ast.Attribute)
-            and node.func.attr == "get"
+            # `setdefault("k", v)` writes k when absent — lib/gp2notation.py
+            # stamps feedpak_version that way, and a subscript-only scan misses
+            # it entirely, letting an emitted key slip past the gate.
+            and node.func.attr in ("get", "setdefault")
             and _is_manifest_receiver(node.func.value)
             and node.args
             and isinstance(node.args[0], ast.Constant)
             and isinstance(node.args[0].value, str)
         ):
-            reads.add(node.args[0].value)
+            bucket = writes if node.func.attr == "setdefault" else reads
+            bucket.add(node.args[0].value)
         elif (
             isinstance(node, ast.Subscript)
             and _is_manifest_receiver(node.value)
@@ -189,6 +217,37 @@ def check_allowlist_closed(baseline: Path | None, bootstrap: bool) -> bool:
         print(f"  allowlist shrank (debt paid down): {', '.join(removed)}")
     print(f"  allowlist-closed: {'FAILED' if added else 'OK'}")
     return not added
+
+
+def check_readers_complete() -> bool:
+    """READERS must not fall behind the codebase.
+
+    The key-coverage scan is only as good as the list of modules it scans, and a
+    hand-maintained list rots: `lib/routers/ws_highway.py` and
+    `lib/gp2notation.py` both touched feedpak manifests for a while without being
+    on it. So re-derive the set — any module that both touches manifest keys and
+    shows a feedpak signal must be listed — and fail if one is missing.
+
+    This is a guard on the gate itself, not on the format.
+    """
+    listed = set(READERS)
+    missing: list[str] = []
+    for pattern in READER_SEARCH:
+        for path in sorted(REPO.glob(pattern)):
+            rel = path.relative_to(REPO).as_posix()
+            if rel in listed:
+                continue
+            src = path.read_text(encoding="utf-8", errors="replace")
+            if KEY_OPS.search(src) and FEEDPAK_SIGNALS.search(src):
+                missing.append(rel)
+
+    for rel in missing:
+        _fail(
+            f"{rel} touches feedpak manifest keys but is not in READERS "
+            f"({Path(__file__).name}) — its keys are going unchecked. Add it."
+        )
+    print(f"  scanning {len(listed)} modules; readers-complete: {'FAILED' if missing else 'OK'}")
+    return not missing
 
 
 def check_key_coverage(spec: Path) -> bool:
@@ -358,7 +417,7 @@ def main() -> int:
         return 1
 
     print("[1/4] key-coverage — core reads/writes only keys the spec declares")
-    ok1 = check_key_coverage(spec)
+    ok1 = check_readers_complete() & check_key_coverage(spec)
     print("[2/4] allowlist-closed — the grandfather list may shrink, never grow")
     ok2 = check_allowlist_closed(args.baseline_exceptions, args.bootstrap_allowlist)
     print("[3/4] forward — core ingests the spec's example packs")
