@@ -2237,8 +2237,7 @@ class MetadataDB:
         existing_filter = self._existing_song_filter().strip()
         rows = self.conn.execute(
             "SELECT filename, arrangement, best_accuracy FROM song_stats "
-            "WHERE plays > 0" +
-            (" AND " + existing_filter if existing_filter else "")
+            "WHERE plays > 0" + existing_filter
         ).fetchall()
         result: dict = {}
         for fn, arr, acc in rows:
