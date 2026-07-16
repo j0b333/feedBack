@@ -144,7 +144,7 @@ TUNING_PRESET_MIDIS: dict[str, dict[str, list[int]]] = {
         "Open E": [40, 47, 52, 56, 59, 64],
     },
     "guitar-7": {
-        "Standard": [35, 40, 45, 50, 55, 59, 64],
+        "B Standard": [35, 40, 45, 50, 55, 59, 64],
         "Bb Standard": [34, 39, 44, 49, 54, 58, 63],
         "A Standard": [33, 38, 43, 48, 53, 57, 62],
         "G Standard": [31, 36, 41, 46, 51, 55, 60],
@@ -153,7 +153,7 @@ TUNING_PRESET_MIDIS: dict[str, dict[str, list[int]]] = {
         "Drop F#": [30, 37, 42, 47, 52, 56, 61],
     },
     "guitar-8": {
-        "Standard": [30, 35, 40, 45, 50, 55, 59, 64],
+        "F# Standard": [30, 35, 40, 45, 50, 55, 59, 64],
         "Drop E": [28, 35, 40, 45, 50, 55, 59, 64],
         "Drop A + Drop E": [28, 33, 40, 45, 50, 55, 59, 64],
         "E Standard": [28, 33, 38, 43, 48, 53, 57, 62],
@@ -171,7 +171,7 @@ TUNING_PRESET_MIDIS: dict[str, dict[str, list[int]]] = {
         "BEAD": [23, 28, 33, 38],
     },
     "bass-5": {
-        "Standard": [23, 28, 33, 38, 43],
+        "B Standard": [23, 28, 33, 38, 43],
         "High C": [28, 33, 38, 43, 48],
         "Eb Standard": [22, 27, 32, 37, 42],
         "D Standard": [21, 26, 31, 36, 41],
@@ -180,7 +180,7 @@ TUNING_PRESET_MIDIS: dict[str, dict[str, list[int]]] = {
         "Drop A": [21, 28, 33, 38, 43],
     },
     "bass-6": {
-        "Standard": [23, 28, 33, 38, 43, 48],
+        "B Standard": [23, 28, 33, 38, 43, 48],
         "Eb Standard": [22, 27, 32, 37, 42, 47],
         "D Standard": [21, 26, 31, 36, 41, 46],
         "C# Standard": [20, 25, 30, 35, 40, 45],

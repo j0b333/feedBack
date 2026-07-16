@@ -173,7 +173,7 @@ def test_default_tunings_include_extended_host_profiles():
 
 def test_default_tuning_frequencies_are_derived_from_midis():
     assert DEFAULT_TUNINGS["guitar-6"]["E Standard"] == open_midis_to_freqs([40, 45, 50, 55, 59, 64])
-    assert DEFAULT_TUNINGS["bass-6"]["Standard"] == open_midis_to_freqs([23, 28, 33, 38, 43, 48])
+    assert DEFAULT_TUNINGS["bass-6"]["B Standard"] == open_midis_to_freqs([23, 28, 33, 38, 43, 48])
 
 
 def test_tuning_offsets_from_named_presets():
@@ -267,7 +267,7 @@ def test_freqs_to_midis_round_trips_at_nonstandard_reference():
     # reference (client-side log2-at-440 reconstruction drifts here).
     from tunings import freqs_to_midis
     for ref in (430.0, 432.0, 444.0, 450.0):
-        for midis in (TUNING_PRESET_MIDIS["guitar-8"]["Standard"], TUNING_PRESET_MIDIS["bass-5"]["Standard"]):
+        for midis in (TUNING_PRESET_MIDIS["guitar-8"]["F# Standard"], TUNING_PRESET_MIDIS["bass-5"]["B Standard"]):
             freqs = open_midis_to_freqs(midis, ref)
             assert freqs_to_midis(freqs, ref) == midis, f"ref={ref}"
 
