@@ -219,7 +219,7 @@ def freqs_to_midis(freqs: list[float], reference_pitch: float = DEFAULT_REFERENC
 
 def tuning_offsets_from_midis(instrument_key: str, midis: list[int]) -> list[int] | None:
     """Return semitone offsets from the instrument's standard open strings."""
-    standard = STANDARD_OPEN_MIDIS.get(instrument_key)
+    standard = _build_standard_midis().get(instrument_key) or STANDARD_OPEN_MIDIS.get(instrument_key)
     if not standard or len(standard) != len(midis):
         return None
     return [int(m - s) for m, s in zip(midis, standard)]
@@ -227,7 +227,7 @@ def tuning_offsets_from_midis(instrument_key: str, midis: list[int]) -> list[int
 
 def tuning_midis_from_offsets(instrument_key: str, offsets: list[int]) -> list[int] | None:
     """Return absolute open-string MIDI notes for host semitone offsets."""
-    standard = STANDARD_OPEN_MIDIS.get(instrument_key)
+    standard = _build_standard_midis().get(instrument_key) or STANDARD_OPEN_MIDIS.get(instrument_key)
     if not standard or len(standard) != len(offsets):
         return None
     return [int(s + o) for s, o in zip(standard, offsets)]
@@ -235,7 +235,9 @@ def tuning_midis_from_offsets(instrument_key: str, offsets: list[int]) -> list[i
 
 def tuning_preset_offsets(instrument_key: str, name: str) -> list[int] | None:
     """Return host semitone offsets for a named preset."""
-    midis = TUNING_PRESET_MIDIS.get(instrument_key, {}).get(name)
+    midis = _build_preset_midis().get(instrument_key, {}).get(name)
+    if not midis:
+        midis = TUNING_PRESET_MIDIS.get(instrument_key, {}).get(name)
     if not midis:
         return None
     return tuning_offsets_from_midis(instrument_key, midis)
