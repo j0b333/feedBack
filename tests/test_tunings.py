@@ -172,7 +172,7 @@ def test_default_tunings_include_extended_host_profiles():
 
 
 def test_default_tuning_frequencies_are_derived_from_midis():
-    assert DEFAULT_TUNINGS["guitar-6"]["Standard"] == open_midis_to_freqs([40, 45, 50, 55, 59, 64])
+    assert DEFAULT_TUNINGS["guitar-6"]["E Standard"] == open_midis_to_freqs([40, 45, 50, 55, 59, 64])
     assert DEFAULT_TUNINGS["bass-6"]["Standard"] == open_midis_to_freqs([23, 28, 33, 38, 43, 48])
 
 

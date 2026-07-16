@@ -128,7 +128,7 @@ STANDARD_OPEN_MIDIS: dict[str, list[int]] = {
 # tuner, practice tools, and plugins can converge on one profile model.
 TUNING_PRESET_MIDIS: dict[str, dict[str, list[int]]] = {
     "guitar-6": {
-        "Standard": [40, 45, 50, 55, 59, 64],
+        "E Standard": [40, 45, 50, 55, 59, 64],
         "Eb Standard": [39, 44, 49, 54, 58, 63],
         "D Standard": [38, 43, 48, 53, 57, 62],
         "C# Standard": [37, 42, 47, 52, 56, 61],
@@ -161,7 +161,7 @@ TUNING_PRESET_MIDIS: dict[str, dict[str, list[int]]] = {
         "Drop D": [26, 33, 38, 43, 48, 53, 57, 62],
     },
     "bass-4": {
-        "Standard": [28, 33, 38, 43],
+        "E Standard": [28, 33, 38, 43],
         "Eb Standard": [27, 32, 37, 42],
         "D Standard": [26, 31, 36, 41],
         "C# Standard": [25, 30, 35, 40],
