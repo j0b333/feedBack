@@ -394,6 +394,7 @@
         const hz = Math.round(settings.reference_pitch || 440);
         const initNote = typeof settings.tuning === 'string'
             ? (TUNING_NOTE[settings.tuning] || 'E') : lowStringNote(settings.tuning);
+        const tuningName = typeof settings.tuning === 'string' ? settings.tuning : 'Custom';
         const seg = (i) => '<div data-tuner-seg="' + i + '" class="w-5 h-[3px] rounded-full ' + _SEG_BASE[i] + '"></div>';
         const meter = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(seg).join('');
         host.innerHTML =
@@ -403,7 +404,8 @@
             '<div class="shrink-0 flex flex-col gap-[3px] items-center justify-center">' + meter + '</div>' +
             '<div class="min-w-0 text-white text-center leading-none">' +
             '<div data-tuner-note class="text-2xl font-black italic tracking-tighter leading-none">' + esc(initNote) + '</div>' +
-            '<div data-tuner-hz class="text-[0.5625rem] text-gray-400 mt-0.5 tracking-wider truncate">' + hz + 'hz</div>' +
+            '<div data-tuner-tuning class="text-[0.5rem] text-gray-400 mt-0.5 tracking-wider truncate leading-tight">' + esc(tuningName) + '</div>' +
+            '<div data-tuner-hz class="text-[0.5625rem] text-gray-500 tracking-wider truncate">' + hz + 'hz</div>' +
             '</div></button>' +
             '</div>';
         host.querySelector('[data-open-tuner]').addEventListener('click', (e) => {
@@ -530,14 +532,28 @@
         } else {
             toggleTitle = 'Instrument: ' + currentInst.label;
         }
+        // Current role label (e.g. "Lead", "Rhythm"), if the instrument has multiple.
+        var roleLabel = '';
+        var hasMultipleRoles = currentInst && currentInst.roles && currentInst.roles.length > 1;
+        if (hasMultipleRoles) {
+            var activePid = settings.active_instrument_profile || (settings.instrument + '-' + (currentInst.roles[0].id));
+            for (var ri = 0; ri < currentInst.roles.length; ri++) {
+                var r = currentInst.roles[ri];
+                if (activePid === settings.instrument + '-' + r.id) {
+                    roleLabel = r.label;
+                    break;
+                }
+            }
+        }
         host.innerHTML =
             '<div id="v3-instrument-wrap" class="relative">' +
             '<button type="button" data-inst-toggle title="' + esc(toggleTitle) + '" ' +
-            'class="bg-fb-card border border-fb-border/50 rounded-2xl h-[92px] w-16 flex flex-col items-center justify-center gap-1.5 hover:ring-1 hover:ring-fb-primary/40 transition">' +
+            'class="bg-fb-card border border-fb-border/50 rounded-2xl h-[92px] w-16 flex flex-col items-center justify-center gap-1 hover:ring-1 hover:ring-fb-primary/40 transition">' +
             iconForInstrument(currentInst) +
             (wt ? '<span class="text-[0.5625rem] leading-none font-semibold max-w-full truncate px-0.5 ' +
-                (wt.isHome ? 'text-fb-textDim' : 'text-amber-400') + '">' + esc(wt.short) + '</span>' : '') +
-            '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>' +
+                (wt.isHome ? 'text-fb-textDim' : 'text-amber-400') + '">' + esc(wt.short) + '</span>'
+                : (roleLabel ? '<span class="text-[0.5625rem] leading-none font-semibold max-w-full truncate px-0.5 text-fb-textDim">' + esc(roleLabel) + '</span>' : '')) +
+            '<svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5"/></svg>' +
             '</button>' +
             '<div data-inst-menu class="hidden absolute right-0 mt-2 w-60 bg-fb-card border border-fb-border/50 rounded-xl shadow-xl p-3 z-50 space-y-3">' +
             ((wt && !wt.isHome)
