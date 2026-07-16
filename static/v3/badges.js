@@ -404,7 +404,7 @@
             '<div class="shrink-0 flex flex-col gap-[3px] items-center justify-center">' + meter + '</div>' +
             '<div class="min-w-0 text-white text-center leading-none">' +
             '<div data-tuner-note class="text-2xl font-black italic tracking-tighter leading-none">' + esc(initNote) + '</div>' +
-            '<div data-tuner-tuning class="text-[0.4375rem] text-gray-400 mt-0.5 tracking-wider leading-tight">' + esc(tuningName) + '</div>' +
+            '<div data-tuner-tuning class="text-[0.5625rem] leading-none font-semibold text-gray-400 mt-0.5 tracking-wider truncate">' + esc(tuningName) + '</div>' +
             '<div data-tuner-hz class="text-[0.5625rem] text-gray-500 tracking-wider truncate">' + hz + 'hz</div>' +
             '</div></button>' +
             '</div>';
@@ -532,11 +532,11 @@
         } else {
             toggleTitle = 'Instrument: ' + currentInst.label;
         }
-        // Current role label (e.g. "Lead", "Rhythm"), if the instrument has multiple.
+        // Current role label (e.g. "Lead", "Rhythm", "Bass", "Drums", "Keys"),
+        // shown on the pill for ALL instruments.
         var roleLabel = '';
-        var hasMultipleRoles = currentInst && currentInst.roles && currentInst.roles.length > 1;
-        if (hasMultipleRoles) {
-            var activePid = settings.active_instrument_profile || (settings.instrument + '-' + (currentInst.roles[0].id));
+        if (currentInst && currentInst.roles && currentInst.roles.length) {
+            var activePid = settings.active_instrument_profile || (settings.instrument + '-' + currentInst.roles[0].id);
             for (var ri = 0; ri < currentInst.roles.length; ri++) {
                 var r = currentInst.roles[ri];
                 if (activePid === settings.instrument + '-' + r.id) {
@@ -544,12 +544,15 @@
                     break;
                 }
             }
+            if (!roleLabel) roleLabel = currentInst.roles[0].label;
         }
         host.innerHTML =
             '<div id="v3-instrument-wrap" class="relative">' +
             '<button type="button" data-inst-toggle title="' + esc(toggleTitle) + '" ' +
             'class="bg-fb-card border border-fb-border/50 rounded-2xl h-[92px] w-16 flex flex-col items-center justify-center gap-1 hover:ring-1 hover:ring-fb-primary/40 transition">' +
             iconForInstrument(currentInst) +
+            // Role always shown when available; working tuning shown as fallback
+            // for single-role instruments when retuned (amber).
             (roleLabel ? '<span class="text-[0.5625rem] leading-none font-semibold max-w-full truncate px-0.5 text-fb-textDim">' + esc(roleLabel) + '</span>'
                 : (wt ? '<span class="text-[0.5625rem] leading-none font-semibold max-w-full truncate px-0.5 ' +
                     (wt.isHome ? 'text-fb-textDim' : 'text-amber-400') + '">' + esc(wt.short) + '</span>' : '')) +
