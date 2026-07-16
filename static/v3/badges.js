@@ -394,7 +394,7 @@
         const hz = Math.round(settings.reference_pitch || 440);
         const initNote = typeof settings.tuning === 'string'
             ? (TUNING_NOTE[settings.tuning] || 'E') : lowStringNote(settings.tuning);
-        const tuningName = typeof settings.tuning === 'string' ? settings.tuning : 'Custom';
+        const tuningName = (typeof settings.tuning === 'string' ? settings.tuning : 'Custom').replace(/ Standard$/, ' Std');
         const seg = (i) => '<div data-tuner-seg="' + i + '" class="w-5 h-[3px] rounded-full ' + _SEG_BASE[i] + '"></div>';
         const meter = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(seg).join('');
         host.innerHTML =
