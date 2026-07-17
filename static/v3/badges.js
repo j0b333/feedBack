@@ -294,8 +294,18 @@
             var overrides = s.instrument_overrides || {};
             var prefs = overrides[instrumentId] || {};
             var hw = prefs.preferred_highway;
-            if (hw && typeof hw === 'string' && typeof window.setViz === 'function') {
-                window.setViz(hw);
+            if (hw && typeof hw === 'string') {
+                localStorage.setItem('vizSelection', hw);
+                var sel = document.getElementById('viz-picker');
+                if (sel) {
+                    for (var i = 0; i < sel.options.length; i++) {
+                        if (sel.options[i].value === hw) { sel.value = hw; return; }
+                    }
+                    var opt = document.createElement('option');
+                    opt.value = hw;
+                    opt.selected = true;
+                    sel.appendChild(opt);
+                }
             }
         } catch (_) {}
     }
