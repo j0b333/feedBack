@@ -101,7 +101,7 @@
             }
 
             // ── Preferred highway ───────────────────────
-            html += _renderHighwaySelect(inst, over);
+            html += (_renderHighwaySelectSafe(inst, over));
 
             // ── Info row ───────────────────────────────
             html += '<div class="text-[0.625rem] text-fb-textDim flex flex-wrap gap-3 pb-2">' +
@@ -178,6 +178,10 @@
             '<button type="button" data-add-sc-btn="' + esc(inst.id) + '" class="bg-fb-primary/20 hover:bg-fb-primary/30 text-fb-primary text-xs px-2 py-1 rounded-md transition">Add</button>' +
             '</div></div>';
         return html;
+    }
+
+    function _renderHighwaySelectSafe(inst, over) {
+        try { return _renderHighwaySelect(inst, over); } catch (e) { console.error('highway select error', e); return ''; }
     }
 
     function _renderHighwaySelect(inst, over) {
@@ -406,19 +410,25 @@
         try {
             var r = await fetch('/api/instruments');
             if (r.ok) _instruments = await r.json();
-        } catch (e) { console.error('instruments-settings: failed to load instruments', e); }
+            console.log('instruments-settings: instruments loaded, count=' + _instruments.length);
+        } catch (e) { console.error('instruments-settings: instruments failed', e); }
 
-        // Load visualization plugins for highway dropdown
+        console.log('instruments-settings: loading plugins...');
         try {
             var pr = await fetch('/api/plugins');
             if (pr.ok) {
                 var plugins = await pr.json();
+                console.log('instruments-settings: plugins loaded, count=' + (Array.isArray(plugins) ? plugins.length : 'not array'));
                 if (Array.isArray(plugins)) {
                     _vizPlugins = plugins.filter(function (p) { return p.type === 'visualization'; });
+                    console.log('instruments-settings: viz plugins count=' + _vizPlugins.length);
                 }
+            } else {
+                console.error('instruments-settings: plugins fetch not ok ' + pr.status);
             }
-        } catch (e) { console.error('instruments-settings: failed to load plugins', e); }
+        } catch (e) { console.error('instruments-settings: plugins failed', e); }
 
+        console.log('instruments-settings: loading settings...');
         try {
             var sr = await fetch('/api/settings');
             if (sr.ok) {
@@ -426,10 +436,15 @@
                 if (s[OVERRIDES_KEY] && typeof s[OVERRIDES_KEY] === 'object') {
                     _overrides = s[OVERRIDES_KEY];
                 }
+                console.log('instruments-settings: settings loaded');
             }
-        } catch (e) { console.error('instruments-settings: failed to load settings', e); }
+        } catch (e) { console.error('instruments-settings: settings failed', e); }
 
-        renderInstruments();
+        console.log('instruments-settings: calling renderInstruments()');
+        try {
+            renderInstruments();
+            console.log('instruments-settings: renderInstruments() done');
+        } catch (e) { console.error('instruments-settings: renderInstruments() crashed', e); }
     }
 
     // Sync test: update the panel IMMEDIATELY at script load time so we can
