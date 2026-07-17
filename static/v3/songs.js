@@ -44,6 +44,9 @@
     ];
     const FORMATS = [['', 'All formats'], ['sloppak', 'Feedpak'], ['loose', 'Folder']];
     function _arrangementOptions() {
+        // Derive filter pill labels from instrument registry role names.
+        // When new instrument plugins are added, their arrangement type labels
+        // appear in the library filter drawer automatically.
         var insts = sm && sm._instruments;
         if (Array.isArray(insts) && insts.length) {
             var names = [];
@@ -4295,6 +4298,11 @@
             return true;
         }
 
+        // When the player changes their instrument in the topbar, auto-filter
+        // the library to show only songs with arrangements matching that
+        // instrument's roles (e.g. Lead+Rhythm for guitar, Bass for bass).
+        // Cleared when the user manually edits the arrangement filter; re-applies
+        // on the next instrument switch.
         sm.on('instrument:changed', function (e) {
             var instId = e && e.detail && e.detail.instrument;
             if (!instId) return;

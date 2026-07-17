@@ -10,10 +10,19 @@ import math
 
 DEFAULT_REFERENCE_PITCH = 440.0
 
+# ── Instrument registry bridge ────────────────────────────────────────────
+# Instruments are now defined by plugins (plugins/instrument_<name>/plugin.json)
+# and registered in the InstrumentRegistry at startup. The helpers below build
+# the same dict shapes (STANDARD_OPEN_MIDIS, TUNING_PRESET_MIDIS, PROFILE_DEFAULTS)
+# from the registry so all downstream consumers automatically stay in sync when
+# new instrument plugins are added. The original hardcoded globals remain as
+# fallbacks for the test environment and startup window before plugins load.
+
 _instrument_registry = None
 
 
 def set_instrument_registry(reg):
+    """Called from server.py after plugin loading completes."""
     global _instrument_registry
     _instrument_registry = reg
 
@@ -352,7 +361,12 @@ def _valid_tuning_for_key(key: str, tuning, *, registry=None):
 
 
 def normalize_instrument_profile(profile_id: str, raw, *, registry=None) -> tuple[dict | None, str | None]:
-    """Validate one persisted host instrument profile."""
+    """Validate one persisted host instrument profile.
+
+    Now registry-aware: validates the instrument ID against registered
+    instruments, and skips string-count/tuning checks for non-stringed
+    kinds (drums, keys) which have no strings.
+    """
     profile_defaults = _build_profile_defaults(registry)
     base = dict(profile_defaults.get(profile_id, {}))
     if not base:

@@ -3505,6 +3505,8 @@ class MetadataDB:
         # ('Lead', 'Alt. Lead', 'Alt. Lead N', 'Bonus Lead', 'Bonus Lead N').
         # Falls back to matching `name` for older rows without smart_name.
         # Legacy mode: matches `name` directly (original behaviour).
+        # Also accept arrangement names from the instrument registry (Drums,
+        # Keys, etc.) so the auto-filter works for non-guitar/bass instruments.
         arr_has = [a for a in (arrangements_has or [])
                      if a in self._ALLOWED_ARRANGEMENT_NAMES
                      or a in self._registry_arrangement_names()]

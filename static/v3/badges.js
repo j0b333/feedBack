@@ -31,6 +31,10 @@
     let _instruments = [];
     let _instrumentsById = {};
 
+    // Fetch instrument definitions from the registry (populated by instrument
+    // plugins) so the selector shows all registered instruments, not just a
+    // hardcoded guitar/bass list. Exposed to working-tuning and song library
+    // via window.feedBack._instruments.
     async function loadInstruments() {
         try {
             const r = await fetch('/api/instruments');
@@ -283,6 +287,8 @@
             instrument: settings.instrument, stringCount: settings.string_count, tuning: settings.tuning, pathway: settings.pathway,
         });
         // Apply preferred highway for this instrument if one is set.
+        // Read instrument_overrides from config.json and apply the per-instrument
+        // preferred highway, if one is set (instruments-as-plugins).
         _applyPreferredHighway(settings.instrument);
         pushToTuner();
         renderTuner(); // reflect new tuning on the tuner card

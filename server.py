@@ -166,6 +166,9 @@ appstate.configure(
     local_library_provider=_local_library_provider,
 )
 
+# Instrument definitions are provided by plugins. The registry is populated
+# during plugin loading and then published to appstate so routers (tunings,
+# settings, ws_highway) and the tunings module can read from it.
 instrument_registry = InstrumentRegistry()
 appstate.configure(instrument_registry=instrument_registry)
 

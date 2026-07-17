@@ -1349,6 +1349,12 @@ def load_plugins(app: FastAPI, context: dict, progress_cb=None, route_setup_fn=N
     )
 
     # ── Instrument plugin registration ────────────────────────────────────
+    # Instruments are defined by bundled plugins (plugins/instrument_<name>/)
+    # with "type": "instrument" in their manifest. The loader extracts the
+    # "instrument" block, stamps the plugin_id (for asset URL building), and
+    # registers it in the InstrumentRegistry so all downstream systems
+    # (tunings, arrangement routing, settings validation, frontend selector)
+    # stay in sync automatically.
     if instrument_registry is not None:
         for plugin_id, plugin_dir, manifest in plugin_load_specs:
             if manifest.get("type") == "instrument":
