@@ -1,7 +1,18 @@
+"""Instrument registry — single source of truth for instrument definitions.
+
+Each instrument (guitar, bass, drums, keys, etc.) is defined by a plugin
+manifest and registered here at startup. Downstream consumers (tunings,
+settings validation, arrangement routing, progression, the frontend
+selector) read from this registry instead of hardcoding instrument names.
+
+See plugins/instrument_<name>/plugin.json for the actual definitions.
+"""
+
 import logging
 
 log = logging.getLogger("feedBack.instruments")
 
+# Valid values for instrument definition fields.
 _INSTRUMENT_KINDS = frozenset({"stringed", "percussion", "keyboard", "vocal", "custom"})
 _DETECT_STRATEGIES = frozenset({"pitch", "onset", "midi", "none"})
 _PATH_FLAGS = frozenset({"path_lead", "path_rhythm", "path_bass"})
@@ -68,10 +79,24 @@ def _validate_offset_list(lst, field_name, expected_len):
 
 
 class InstrumentRegistry:
+    """Holds validated instrument definitions registered by instrument plugins.
+
+    Populated by the plugin loader during startup when it discovers plugins
+    with ``"type": "instrument"``. Consumers (tunings, settings validation,
+    arrangement routing, progression, frontend selector) read from this
+    registry instead of hardcoding instrument knowledge.
+    """
+
     def __init__(self):
         self._instruments: dict[str, dict] = {}
 
     def register(self, definition: dict):
+        """Validate and store an instrument definition.
+
+        Raises ValueError with a descriptive message on schema violations.
+        Normalizes the definition: lowercases arrangement names, deduplicates
+        flags, ensures exactly one role has ``default: true``.
+        """
         inst_id = _validate_str(definition.get("id"), "instrument.id")
         if inst_id in self._instruments:
             raise ValueError(f"instrument {inst_id!r} is already registered")

@@ -1,3 +1,9 @@
+"""Registered instrument definitions (GET /api/instruments).
+
+Reads from the appstate.instrument_registry seam — the same instance
+populated by the plugin loader when it discovers type:instrument plugins.
+"""
+
 from fastapi import APIRouter
 import appstate
 

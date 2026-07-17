@@ -1,7 +1,14 @@
-// Instruments settings tab ΓÇö renders collapsible instrument cards from
-// GET /api/instruments, with editable custom tunings and arrangement patterns.
-// User overrides are persisted to config.json via POST /api/settings under
-// the "instrument_overrides" key so they survive restarts.
+// Instruments settings tab — renders collapsible instrument cards from
+// GET /api/instruments with editable custom tunings, arrangement name
+// patterns, string counts, and preferred highway per instrument.
+//
+// User overrides are persisted to config.json via instrument_overrides
+// key in /api/settings so they survive restarts. Each card shows:
+//   - Roles (read-only, from plugin definition)
+//   - Arrangement name patterns (editable, add/remove)
+//   - String counts (editable for stringed instruments)
+//   - Tuning presets with offset display (read-only plugin + editable user)
+//   - Preferred highway (dropdown of all viz plugins)
 (function () {
     'use strict';
 
