@@ -4311,6 +4311,7 @@
         // on the next instrument switch.
         sm.on('instrument:changed', function (e) {
             var instId = e && e.detail && e.detail.instrument;
+            console.log('auto-filter: instrument=' + instId + ' enabled=' + _autoFilterEnabled);
             if (!instId || !_autoFilterEnabled) return;
             if (_applyArrangementAutoFilter(instId)) {
                 reload();
