@@ -101,11 +101,13 @@
             }
 
             // Preferred highway
-            if (_vizPlugins.length) {
+            {
                 var hwCurrent = over.preferred_highway || '';
                 html += '<div class="mb-2"><div class="text-[0.625rem] uppercase tracking-wider text-fb-textDim mb-1.5">Preferred highway</div>' +
                     '<select data-highway="' + esc(inst.id) + '" class="bg-gray-800/50 border border-gray-700 rounded-md px-2 py-1 text-xs text-fb-text outline-none focus:border-fb-primary w-full">' +
-                    '<option value="">Auto (match arrangement)</option>';
+                    '<option value="">Auto (match arrangement)</option>' +
+                    '<option value="default"' + (hwCurrent === 'default' ? ' selected' : '') + '>Built-in 2D Highway</option>' +
+                    '<option value="venue"' + (hwCurrent === 'venue' ? ' selected' : '') + '>Venue</option>';
                 for (var v = 0; v < _vizPlugins.length; v++) {
                     var vp = _vizPlugins[v];
                     html += '<option value="' + esc(vp.id) + '"' + (vp.id === hwCurrent ? ' selected' : '') + '>' + esc(vp.name) + '</option>';
