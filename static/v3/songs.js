@@ -597,7 +597,7 @@
         var badgeText = acc != null && acc >= 0.5 && acc < MASTERY_ACCURACY ? 'text-black' : 'text-white';
         var borderColor = acc != null ? (acc >= MASTERY_ACCURACY ? '#22c55e' : (acc >= 0.5 ? '#eab308' : '#ef4444')) : '#4b5563';
         return '<span class="fb-acc-badge absolute bottom-0 right-0 px-2 py-0.5 rounded-tl-md text-xs font-bold flex items-center gap-1 opacity-100 group-hover:opacity-0 transition border-l-2 border-t-2 ' + badgeText + '" style="background:' + badgeColor + ';border-color:' + borderColor + '">' +
-            (pct != null ? pct : '—') + '%</span>' + hoverOverlay;
+            (pct != null ? pct : 'n/a') + '</span>' + hoverOverlay;
     }
 
     function _roleIcon(arrName) {
