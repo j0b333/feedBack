@@ -405,16 +405,18 @@
         try {
             var r = await fetch('/api/instruments');
             if (r.ok) _instruments = await r.json();
-        } catch (_) {}
+        } catch (e) { console.error('instruments-settings: failed to load instruments', e); }
 
         // Load visualization plugins for highway dropdown
         try {
             var pr = await fetch('/api/plugins');
             if (pr.ok) {
                 var plugins = await pr.json();
-                _vizPlugins = plugins.filter(function (p) { return p.type === 'visualization'; });
+                if (Array.isArray(plugins)) {
+                    _vizPlugins = plugins.filter(function (p) { return p.type === 'visualization'; });
+                }
             }
-        } catch (_) {}
+        } catch (e) { console.error('instruments-settings: failed to load plugins', e); }
 
         try {
             var sr = await fetch('/api/settings');
@@ -424,7 +426,7 @@
                     _overrides = s[OVERRIDES_KEY];
                 }
             }
-        } catch (_) {}
+        } catch (e) { console.error('instruments-settings: failed to load settings', e); }
 
         renderInstruments();
     }
