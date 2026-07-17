@@ -526,6 +526,9 @@
                 var sn = a.smart_name || a.name || '';
                 if (sn === activeRoleLabel) return a.index != null ? a.index : i;
             }
+            // Active role selected but no matching arrangement — return null
+            // so the badge shows "n/a" instead of falling back to a different role.
+            return null;
         }
         // Fallback: first arrangement matching any auto-filter value.
         for (var i = 0; i < song.arrangements.length; i++) {
