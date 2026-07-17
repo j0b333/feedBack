@@ -239,6 +239,9 @@
                     instrument_profiles: profiles,
                     active_instrument_profile: typeof s.active_instrument_profile === 'string' ? s.active_instrument_profile : profileIdForInstrument(instrument),
                 };
+                // Expose active profile on initial load too, so the library can
+                // resolve per-role accuracy from first paint.
+                if (sm) sm._activeInstrumentProfile = settings.active_instrument_profile;
             }
         } catch (e) { /* settings endpoint always present */ }
     }
