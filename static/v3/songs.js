@@ -3651,25 +3651,17 @@
         // toolbar so its selects reflect the saved choice (default: Artist A–Z).
         if (!_prefsRestored) { applySavedPrefs(); _prefsRestored = true; }
         // ── Auto-apply instrument arrangement filter on first render ─────
-        // Always read the auto-filter toggle from settings so the user can
-        // enable/disable it in Settings → Gameplay without a full page reload.
-        try {
-            var sr = await fetch('/api/settings');
-            if (sr.ok) {
-                var sd = await sr.json();
-                _autoFilterEnabled = sd.auto_filter_instrument !== false;
-            }
-        } catch (_) {}
+        // auto_filter_instrument setting is already refreshed in
+        // onV3SongsScreenEnter before render() is called.
         if (_autoFilterEnabled && _arrAutoInstrument === null && !state.filters.arr_has.length && !state.filters.arr_lacks.length) {
             try {
-                var instId = sd && sd.instrument;
-                if (instId) _applyArrangementAutoFilter(instId);
+                var sr2 = await fetch('/api/settings');
+                if (sr2.ok) {
+                    var sd2 = await sr2.json();
+                    var instId = sd2 && sd2.instrument;
+                    if (instId) _applyArrangementAutoFilter(instId);
+                }
             } catch (_) {}
-        } else if (!_autoFilterEnabled && state.filters.arr_has.length) {
-            // Toggle was turned off — clear any previously-applied auto-filter.
-            state.filters.arr_has = [];
-            state.filters.arr_lacks = [];
-            _arrAutoInstrument = null;
         }
         const providers = await loadProviders();
         const [, tn] = await Promise.all([
@@ -3843,6 +3835,26 @@
     }
 
     async function onV3SongsScreenEnter() {
+        // Always refresh the auto-filter toggle state so the user can
+        // enable/disable it in Settings without a full page reload.
+        try {
+            var sr = await fetch('/api/settings');
+            if (sr.ok) {
+                var sd = await sr.json();
+                _autoFilterEnabled = sd.auto_filter_instrument !== false;
+                // If the toggle was turned off, clear any previously-applied filter.
+                if (!_autoFilterEnabled && state.filters.arr_has.length) {
+                    state.filters.arr_has = [];
+                    state.filters.arr_lacks = [];
+                    _arrAutoInstrument = null;
+                }
+                // If the toggle was turned on and no filter is active, apply it.
+                if (_autoFilterEnabled && _arrAutoInstrument === null && !state.filters.arr_has.length && !state.filters.arr_lacks.length) {
+                    var instId = sd && sd.instrument;
+                    if (instId) _applyArrangementAutoFilter(instId);
+                }
+            }
+        } catch (_) {}
         // A library scan / DLC-folder change marked the grid stale — re-fetch
         // from scratch instead of restoring a cached (possibly empty, pre-DLC)
         // snapshot. Must win over every fast-path below.
