@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   new `type: "instrument"` plugins with zero code changes.
 - **Per-role mastery** — the library grid now shows mastery % for the currently
   selected instrument *role* (Lead, Rhythm, Bass, etc.) instead of the song-wide
-  maximum. Selecting Guitar → Rhythm shows your Rhythm scores, not Lead.
+  maximum. Selecting Guitar > Rhythm shows your Rhythm scores, not Lead.
 - **Hover overlay on library cards** — hovering album art reveals all
   arrangements with their individual accuracy percentages (or "—" for
   unplayed, "n/a" when the selected role has no matching arrangement).
@@ -27,9 +27,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Per-instrument role selection** — multi-role instruments (Guitar) show
   Lead/Rhythm pills in the selector. Switching roles changes which arrangement
   the highway opens and which mastery % the library displays.
-- **Per-instrument preferred highway** — Settings → Instruments lets you assign
+- **Per-instrument preferred highway** — Settings > Instruments lets you assign
   a preferred note highway per instrument. Changing instruments auto-selects it.
-- **Instrument settings tab** (Settings → Instruments) with collapsible cards
+- **Instrument settings tab** (Settings > Instruments) with collapsible cards
   showing roles, editable arrangement name patterns, string counts, custom
   tuning presets, and per-instrument preferred highway.
 - **Auto-filter by instrument** — the Song Library auto-filters to arrangements
@@ -43,38 +43,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Score attribution fix** — scores now record the server-resolved arrangement
   index (from `song:ready`) instead of defaulting to 0 when clicking the main
   card (not an arrangement chip).
-
-### Changed
-- **Standard tuning renamed** — the all-zero-offset tuning is now named
-  "E Standard" (guitar-6, bass-4), "B Standard" (guitar-7, bass-5/6), or
-  "F# Standard" (guitar-8) instead of the ambiguous "Standard".
-- **Tuning chip** moved to the top-left card corner (flush, no padding offset).
-- **Mastery badge** now has a colored left/top border matching its level
-  (green/amber/red) with a translucent fill.
-- **Arrangement filter pills** in the library drawer are now derived from the
-  instrument registry's role labels instead of a hardcoded list.
-- **Settings validation** accepts any registered instrument ID, not just
-  "guitar" or "bass". Non-stringed instruments skip string-count/tuning checks.
-- **Working-tuning capability** now reads instrument definitions from the
-  registry for normalization.
-- **Arrangement routing** (`ws_highway.py`) uses role flags and arrangement
-  names from the instrument registry instead of hardcoded bass detection.
-- **Progression** `instrument_for_arrangement` accepts a `registry` parameter
-  and returns `None` for unrecognized arrangements instead of defaulting to
-  "guitar".
-- **Icons** — instrument selector card shows per-instrument icons instead of
-  a single hardcoded guitar SVG.
-- **Pathway removed** from the instrument selector (unused feature).
-
-### Fixed
-- **Tuner sync** — switching instruments in the selector now correctly pushes
-  the new instrument key to the tuner plugin.
-- **SQL error** in `arrangement_accuracy_map` when `_existing_song_filter` is
-  empty (double-AND).
-- **Default arrangement dropdown** removed from Settings → Gameplay (moved to
-  the instrument selector role pills).
-
-### Added
+- **Drum-part picker (feedpak 1.17.0 "drums as arrangements").** When a song
+  carries several drum charts, a **Drum part** selector appears beside the
+  arrangement switcher (advanced settings) so a player can choose which drummer
+  to play. Selecting one re-streams that part's tab over the highway WS
+  (`?drum_part=<id>`, mirroring the arrangement switch); the choice persists
+  across an arrangement change, and the picker reflects the server's
+  authoritative part (unknown/absent selection falls back to the primary). The
+  row hides for single-drum and non-drum songs, so nothing changes there. Builds
+  on the loader below; no plugin change needed — the drum renderer just draws
+  whatever tab streams.
+- **Multiple drum parts (feedpak 1.17.0 "drums as arrangements").** The sloppak
+  loader now reads `type: drums` arrangement entries carrying per-arrangement
+  `drum_tab` file pointers — a song can ship several drum charts (a second
+  drummer, an aux-percussion layer). Parts surface as `LoadedSloppak.drum_parts`
+  (primary first; the entry aliasing the song-level `drum_tab:` key is the
+  primary and is never loaded twice), the highway WS `song_info` gains a
+  `drum_parts` name list, and `?drum_part=<id>` on the WS URL selects which
+  part's tab streams (`drum_tab` messages carry `part_id` when multiple parts
+  exist; unknown ids fall back to the primary). Pointer entries are **never**
+  loaded as fretted arrangements — the loader's file/notation gate keeps a drum
+  part out of the fretted pipeline (and out of note-detection grading), pinned
+  by test. Legacy single-drum packs read exactly as before, as a one-part list.
+- **`chart-transform` capability domain (#952)** — plugins can now remap the
+  chart before rendering and scoring through a core-owned provider
+  coordinator. Synchronous transforms run after difficulty filtering; host
+  data is isolated from providers, accepted timelines are time-sorted, and
+  failures fall back to the original chart with a fixed public reason.
+  Effective chart arrays and metadata are available to 2D/custom renderers
+  and highway getters, while `getSongInfo()` retains the original metadata.
+  Provider selection persists and applies to primary and splitscreen highways.
+- **Library filter: one-click "Not split" + a piano stem pill.** The v3 Filters drawer's
+  stems section gains a **Not split** shortcut that selects "lacks every instrument stem"
+  in one tap — the same query Stem Splitter's missing-stems view runs — instead of
+  cycling five pills to ✕ by hand. The pill row also gains `piano` (the drawer offered
+  five of the canonical six stems, so a piano-only song wrongly matched a hand-built
+  "lacks all" filter). "No lyrics" already existed in the Lyrics section.
 - **Gold tier (career passports)** — an earned badge turns **gold** when
   Virtuoso verifies an improvised jam in the passport's style (the
   `gold_improv` artifact relays with the drill snapshot; a genre inherits its
@@ -111,8 +115,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   data-driven bar (avg ≥ 75%) — into the career state; abandoned sets never
   log (no fail state: the gig you finished is the gig you played). Passports
   carry their gig log; instruments their gig count.
+- **3D Highway: fret wires flash on a confirmed hit** — when a scorer (note_detect)
+  confirms a note through the `getNoteState` provider (feedBack#254), the fret wires
+  bracketing it light up. A fretted note lights the wire behind it and the wire it's
+  pressed against; a chord lights only the outermost wires of its shape; an open
+  string lights the anchor lane's edge wires (its gem is drawn as a slab spanning the
+  lane, so those are the wires it sits between); a chord likewise lights the lane's edge
+  wires — the lit lane strip can run a fret past the chord's outermost fret, and a
+  bracket one wire inside the lit lane reads as misaligned (the shape's own outer pair
+  survives only as the fallback on anchor-less charts). At most **two wires are ever lit at
+  once**: when overlapping decay tails (fast passages) would light a run of wires, the
+  flash collapses to the outermost pair of the lit span — one bracket, never a picket
+  fence. The gem's rim joins in: on a confirmed hit the outline flashes in the
+  string's own colour with the same intensity treatment as the wires, fading with the
+  scorer's alpha. With no scorer attached, nothing changes.
+- **Background controls in the player (3D Highway)** — change the highway
+  background mid-song from the player's Plugin Controls popover instead of
+  opening Settings: a style dropdown, a Reactive toggle, and an Intensity
+  slider, all kept in sync with the Settings page. Controls that the active
+  style ignores are greyed out with a reason on hover (Custom video and
+  Butterchurn use neither; Custom image uses Intensity but not Reactive), so
+  a knob is never present-but-inert. The control disappears when a non-3D
+  renderer is selected. The whole group also greys out while the Venue scene
+  override is active, since none of the three controls reach a mounted style
+  in that mode.
 
 ### Changed
+- **Standard tuning renamed** — the all-zero-offset tuning is now named
+  "E Standard" (guitar-6, bass-4), "B Standard" (guitar-7, bass-5/6), or
+  "F# Standard" (guitar-8) instead of the ambiguous "Standard".
+- **Tuning chip** moved to the top-left card corner (flush, no padding offset).
+- **Mastery badge** now has a colored left/top border matching its level
+  (green/amber/red) with a translucent fill.
+- **Arrangement filter pills** in the library drawer are now derived from the
+  instrument registry's role labels instead of a hardcoded list.
+- **Settings validation** accepts any registered instrument ID, not just
+  "guitar" or "bass". Non-stringed instruments skip string-count/tuning checks.
+- **Working-tuning capability** now reads instrument definitions from the
+  registry for normalization.
+- **Arrangement routing** (`ws_highway.py`) uses role flags and arrangement
+  names from the instrument registry instead of hardcoded bass detection.
+- **Progression** `instrument_for_arrangement` accepts a `registry` parameter
+  and returns `None` for unrecognized arrangements instead of defaulting to
+  "guitar".
+- **Icons** — instrument selector card shows per-instrument icons instead of
+  a single hardcoded guitar SVG.
+- **Pathway removed** from the instrument selector (unused feature).
 - **`GET /api/song/{f}?stems=1`** (new, opt-in) — returns the pack's playable stem
   list (`[{id, url, default}]` + `full_mix_url`), the same list the highway's WS
   `ready` sends. The stems plugin could only learn it from that WS message, which
@@ -131,6 +179,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tree — which is how the song-preview menu check ended up eating ~50% of the
   renderer and dropping the app to 2.7 fps. Lists longer than 200 songs are now
   windowed (25–31 rows in the DOM instead of 50,000); shorter lists are unchanged.
+- **3D Highway: fret wires read as a focus cue** — the contrast between the active
+  anchor lane and the rest of the neck is widened (the lane's wires brighter, the rest
+  dimmer), and the wires themselves are slightly thicker.
 - **The full mix is a stem** (#933) — core no longer depends on `original_audio:`, a
   top-level manifest key this repo invented (#583) that the feedpak spec never had.
   The format already carried the pre-separation mixdown as a stem; feedpak 1.15.0
@@ -279,6 +330,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   engine (`app.js`, `highway.js`, `playSong`, `showScreen`, the capability registry).
 
 ### Fixed
+- **Tuner sync** — switching instruments in the selector now correctly pushes
+  the new instrument key to the tuner plugin.
+- **SQL error** in `arrangement_accuracy_map` when `_existing_song_filter` is
+  empty (double-AND).
+- **Default arrangement dropdown** removed from Settings > Gameplay (moved to
+  the instrument selector role pills).
+- **GP8 asset resolution honours the directory the registry named.**
+  `<EmbeddedFilePath>` is matched on filename stem so a format variant of the
+  same recording can win (an `.ogg` beside the declared `.mp3` is copied out
+  losslessly instead of transcoded) — but the search was not restricted to the
+  declared directory, so an unrelated file elsewhere in the archive that merely
+  shared the stem could stand in for the declared asset. That is the exact
+  substitution the registry lookup exists to prevent. Candidates are now
+  confined to the registry path's own directory; a genuinely absent asset
+  falls through as documented.
+- **Guitar Pro 8: the right backing track is extracted when a file carries more than one.**
+  `BackingTrack/AssetId` is a key into the GPIF's `<Assets>` registry — `<Asset
+  id="0"><EmbeddedFilePath>` names the exact path inside the archive — but it
+  was being matched against embedded *filename stems*. GP8 names embedded audio
+  by hash while ids are small integers, so that match essentially never hit: every
+  such file warned and fell through to "first audio asset". That was silently
+  correct while a file carried exactly one recording — with two, a backing track
+  declaring id 1 resolved to asset 0, i.e. the wrong take. Resolution now reads
+  the registry first (verifying the path is really in the archive, so a stale
+  entry falls through rather than resolving to nothing), then the legacy stem
+  match, then the first asset.
+- **Guitar Pro import no longer fails on non-ASCII song metadata (Windows).**
+  The GP→arrangement-XML writers wrote their output with `Path.write_text()`
+  and no explicit encoding, so on Windows (cp1252 default) a metadata
+  character like the © in an album name ("Chrysalis©1982") was written as a
+  lone `0xA9` byte — invalid UTF-8 — and import died with
+  `not well-formed (invalid token): line N, column 22`. All three arrangement
+  XML writes now pin `encoding="utf-8"`.
+- **3D Highway: the lane stops at the hit line** (#991) — the highway lane, its
+  dividers, and the fret boundary extension lines ran `BEHIND` seconds *past* the
+  hit line toward the player. Nothing is ever drawn in that strip (notes and chord
+  frames clamp to `Math.min(0, dZ(dt))`), so it read as lane with no notes on it.
+  The floor geometry now ends at the hit line; its far edge is unchanged, still
+  `-AHEAD*TS` at the note horizon.
 - **Career passports review polish** — the passport tabs and book overlay carry
   proper ARIA semantics (`aria-selected`/`aria-controls`/`tabpanel`;
   `role="dialog"` + `aria-modal` with focus moved to the close button on open
