@@ -158,6 +158,26 @@ class InstrumentRegistry:
         else:
             default_kc = 0
 
+        fret_counts = definition.get("fret_counts")
+        if kind == "stringed":
+            if not isinstance(fret_counts, list) or not fret_counts:
+                raise ValueError("instrument.fret_counts must be a non-empty list for stringed instruments")
+            fc_list = []
+            for v in fret_counts:
+                if isinstance(v, bool) or not isinstance(v, (int, float)):
+                    raise ValueError("instrument.fret_counts entries must be integers")
+                fc_list.append(int(v))
+            fret_counts = sorted(set(fc_list))
+        else:
+            fret_counts = []
+
+        default_fc = definition.get("default_fret_count", 0)
+        if kind == "stringed":
+            if default_fc not in fret_counts:
+                raise ValueError(f"instrument.default_fret_count {default_fc} not in fret_counts {fret_counts}")
+        else:
+            default_fc = 0
+
         standard_tunings = {}
         raw_std = definition.get("standard_tunings") or {}
         if kind == "stringed":
@@ -238,6 +258,8 @@ class InstrumentRegistry:
             "default_string_count": default_sc,
             "key_counts": key_counts,
             "default_key_count": default_kc,
+            "fret_counts": fret_counts,
+            "default_fret_count": default_fc,
             "detect_strategy": detect_strategy,
             "reference_pitch": ref_pitch,
             "standard_tunings": standard_tunings,

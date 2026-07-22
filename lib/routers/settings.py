@@ -276,6 +276,16 @@ def save_settings(data: dict):
             if kc < 1 or kc > 127:
                 return {"error": "key_count must be an integer 1–127"}
             updates["key_count"] = kc
+    if "fret_count" in data:
+        raw = data["fret_count"]
+        if raw is not None:
+            try:
+                fc = _as_int(raw)
+            except (TypeError, ValueError, OverflowError):
+                return {"error": "fret_count must be an integer"}
+            if fc < 12 or fc > 30:
+                return {"error": "fret_count must be an integer 12–30"}
+            updates["fret_count"] = fc
     if "tuning" in data:
         raw = data["tuning"]
         # Accept a tuning NAME (string ≤64) or a list of up to 8 semitone
@@ -361,7 +371,7 @@ def save_settings(data: dict):
         # that doesn't touch instrument settings must stay a plain partial merge
         # — otherwise an empty (or unrelated) POST would freeze the default
         # profiles into the on-disk config.
-        _profile_keys = ("instrument", "string_count", "tuning", "reference_pitch",
+        _profile_keys = ("instrument", "string_count", "fret_count", "tuning", "reference_pitch",
                          "pathway", "instrument_profiles", "active_instrument_profile")
         if "instrument_profiles" in cfg or any(k in updates for k in _profile_keys):
             try:
@@ -388,7 +398,7 @@ def save_settings(data: dict):
 _RESETTABLE_SETTINGS_KEYS = frozenset({
     "default_arrangement", "demucs_server_url", "master_difficulty",
     "av_offset_ms", "countdown_before_song", "miss_penalty", "fail_behavior",
-    "reference_pitch", "instrument", "string_count", "tuning", "pathway",
+    "reference_pitch", "instrument", "string_count", "fret_count", "tuning", "pathway",
     "instrument_profiles", "active_instrument_profile",
     "achievements_enabled", "use_amp_sims",
 })
@@ -486,6 +496,10 @@ def _validate_server_config_types(cfg: dict) -> str | None:
         v = cfg["string_count"]
         if v is not None and (isinstance(v, bool) or not isinstance(v, int) or not (4 <= v <= 8)):
             return "server_config.string_count must be an integer between 4 and 8"
+    if "fret_count" in cfg:
+        v = cfg["fret_count"]
+        if v is not None and (isinstance(v, bool) or not isinstance(v, int) or not (12 <= v <= 30)):
+            return "server_config.fret_count must be an integer between 12 and 30"
     if "tuning" in cfg:
         v = cfg["tuning"]
         if v is not None:

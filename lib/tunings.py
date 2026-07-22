@@ -85,6 +85,7 @@ def _build_profile_defaults(registry=None):
                     "instrument": inst["id"],
                     "role": role["id"],
                     "string_count": inst.get("default_string_count", 0),
+                    "fret_count": inst.get("default_fret_count", 0),
                     "tuning": "E Standard",
                     "reference_pitch": inst.get("reference_pitch", DEFAULT_REFERENCE_PITCH),
                     "pathway": "songs",
@@ -294,6 +295,7 @@ PROFILE_DEFAULTS: dict[str, dict] = {
         "instrument": "guitar",
         "role": "lead",
         "string_count": 6,
+        "fret_count": 22,
         "tuning": "E Standard",
         "reference_pitch": DEFAULT_REFERENCE_PITCH,
         "pathway": "songs",
@@ -304,6 +306,7 @@ PROFILE_DEFAULTS: dict[str, dict] = {
         "instrument": "guitar",
         "role": "rhythm",
         "string_count": 6,
+        "fret_count": 22,
         "tuning": "E Standard",
         "reference_pitch": DEFAULT_REFERENCE_PITCH,
         "pathway": "songs",
@@ -314,6 +317,7 @@ PROFILE_DEFAULTS: dict[str, dict] = {
         "instrument": "bass",
         "role": "bass",
         "string_count": 4,
+        "fret_count": 20,
         "tuning": "E Standard",
         "reference_pitch": DEFAULT_REFERENCE_PITCH,
         "pathway": "songs",
@@ -425,9 +429,14 @@ def normalize_instrument_profile(profile_id: str, raw, *, registry=None) -> tupl
         tuning = _valid_tuning_for_key(key, raw.get("tuning", base["tuning"]), registry=registry)
         if tuning is None:
             return None, f"instrument_profiles.{profile_id}.tuning must match {key}"
+        try:
+            fret_count = int(raw.get("fret_count", base.get("fret_count", 0)))
+        except (TypeError, ValueError, OverflowError):
+            fret_count = base.get("fret_count", 0)
     else:
         string_count = 0
         tuning = ""
+        fret_count = 0
 
     ref = _valid_reference_pitch(raw.get("reference_pitch", base["reference_pitch"]))
     if ref is None:
@@ -450,6 +459,7 @@ def normalize_instrument_profile(profile_id: str, raw, *, registry=None) -> tupl
         "instrument": instrument,
         "role": role,
         "string_count": string_count,
+        "fret_count": fret_count,
         "tuning": tuning,
         "reference_pitch": ref,
         "pathway": pathway,
@@ -514,9 +524,14 @@ def profile_from_legacy_settings(cfg: dict, *, registry=None) -> dict:
                     default_tuning = name
                     break
         tuning = _valid_tuning_for_key(key, cfg.get("tuning", default_tuning), registry=registry) or default_tuning
+        try:
+            fc = int(cfg.get("fret_count", inst_def.get("default_fret_count", 22) if inst_def else 22))
+        except (TypeError, ValueError, OverflowError):
+            fc = inst_def.get("default_fret_count", 22) if inst_def else 22
     else:
         sc = 0
         tuning = ""
+        fc = 0
     ref = _valid_reference_pitch(cfg.get("reference_pitch", DEFAULT_REFERENCE_PITCH)) or DEFAULT_REFERENCE_PITCH
     pathway = cfg.get("pathway") if cfg.get("pathway") in PROFILE_PATHWAYS else "songs"
     profile_id = _default_profile_id_for_instrument(instrument, registry)
@@ -524,6 +539,7 @@ def profile_from_legacy_settings(cfg: dict, *, registry=None) -> dict:
     profile.update({
         "instrument": instrument,
         "string_count": sc,
+        "fret_count": fc,
         "tuning": tuning,
         "reference_pitch": ref,
         "pathway": pathway,
@@ -553,6 +569,7 @@ def settings_with_instrument_profiles(cfg: dict, *, registry=None) -> dict:
     out["active_instrument_profile"] = active
     out["instrument"] = selected["instrument"]
     out["string_count"] = selected["string_count"]
+    out["fret_count"] = selected.get("fret_count", 0)
     out["tuning"] = selected["tuning"]
     out["reference_pitch"] = selected["reference_pitch"]
     out["pathway"] = selected["pathway"]
@@ -563,7 +580,7 @@ def apply_flat_instrument_patch_to_profiles(cfg: dict, updates: dict, *, registr
     """Mirror legacy flat instrument updates into the active host profile."""
     reg = registry or _instrument_registry
     out = settings_with_instrument_profiles(cfg, registry=reg)
-    if not any(k in updates for k in ("instrument", "string_count", "tuning", "reference_pitch", "pathway")):
+    if not any(k in updates for k in ("instrument", "string_count", "fret_count", "tuning", "reference_pitch", "pathway")):
         return out
     active = active_profile_id(out.get("active_instrument_profile"), registry=reg)
     if "instrument" in updates:
@@ -579,8 +596,14 @@ def apply_flat_instrument_patch_to_profiles(cfg: dict, updates: dict, *, registr
                 current["string_count"] = inst_def.get("default_string_count", 0)
             else:
                 current["string_count"] = 4 if updates["instrument"] == "bass" else 6
+        if "fret_count" not in updates:
+            inst_def = reg.get(updates["instrument"]) if reg else None
+            if inst_def:
+                current["fret_count"] = inst_def.get("default_fret_count", 0)
     if "string_count" in updates:
         current["string_count"] = updates["string_count"]
+    if "fret_count" in updates:
+        current["fret_count"] = updates["fret_count"]
     if "reference_pitch" in updates:
         current["reference_pitch"] = updates["reference_pitch"]
     if "pathway" in updates:

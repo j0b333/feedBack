@@ -76,6 +76,11 @@
         if (instId === 'bass') return STRING_COUNTS.bass;
         return STRING_COUNTS.guitar;
     }
+    function fretCountsFor(instId) {
+        var inst = getInstrument(instId);
+        if (inst && inst.kind === 'stringed' && Array.isArray(inst.fret_counts) && inst.fret_counts.length) return inst.fret_counts;
+        return [21, 22, 24];
+    }
     // Tuning names per instrument key (e.g. 'guitar-6', 'bass-4'), loaded from
     // GET /api/tunings. Falls back to empty arrays until the fetch resolves.
     let _tuningsByKey = {};
@@ -160,7 +165,7 @@
         }
     }
 
-    let settings = { instrument: 'guitar', string_count: 6, key_count: 88, tuning: 'Standard', reference_pitch: 440, pathway: 'songs', instrument_profiles: {}, active_instrument_profile: 'guitar-lead' };
+    let settings = { instrument: 'guitar', string_count: 6, fret_count: 22, key_count: 88, tuning: 'Standard', reference_pitch: 440, pathway: 'songs', instrument_profiles: {}, active_instrument_profile: 'guitar-lead' };
 
     async function loadTunings() {
         try {
@@ -233,9 +238,13 @@
                 else tuning = tunings[0] || 'Standard';
                 const profiles = s.instrument_profiles && typeof s.instrument_profiles === 'object' ? s.instrument_profiles : {};
                 const keyCount = Number.isFinite(Number(s.key_count)) ? Number(s.key_count) : 88;
+                const fretCounts = isStringedInstrument(instrument) ? fretCountsFor(instrument) : [];
+                const fc = Number(s.fret_count);
+                const fcValid = fretCounts.length && fretCounts.includes(fc) ? fc : (fretCounts[0] || (instrument === 'bass' ? 20 : 22));
                 settings = {
                     instrument: instrument,
                     string_count: scValid,
+                    fret_count: fcValid,
                     key_count: keyCount,
                     tuning: tuning,
                     reference_pitch: Math.min(450, Math.max(430, ref)),
@@ -258,6 +267,7 @@
         let changed = false;
         if (patch.instrument) { profile.instrument = patch.instrument; changed = true; }
         if (patch.string_count != null) { profile.string_count = patch.string_count; changed = true; }
+        if (patch.fret_count != null) { profile.fret_count = patch.fret_count; changed = true; }
         if (patch.tuning != null) { profile.tuning = patch.tuning; changed = true; }
         if (patch.reference_pitch != null) { profile.reference_pitch = patch.reference_pitch; changed = true; }
         if (patch.pathway != null) { profile.pathway = patch.pathway; changed = true; }
@@ -616,6 +626,8 @@
                 : '') +
             (isStringed ? instRow('Strings', stringCountsFor(settings.instrument).map((v) =>
                 pill('strings', v, v + '', settings.string_count === v)).join('')) : '') +
+            (isStringed ? instRow('Frets', fretCountsFor(settings.instrument).map((v) =>
+                pill('frets', v, v + '', (settings.fret_count || 22) === v)).join('')) : '') +
             (isKeyboard ? instRow('Keys', (currentInst.key_counts || [25, 49, 61, 88]).map((v) =>
                 pill('key_count', v, v + '', (settings.key_count || currentInst.default_key_count || 88) === v)).join('')) : '') +
             // Handedness only for stringed instruments where frets get mirrored.
@@ -651,6 +663,7 @@
             const counts = stringCountsFor(v);
             // Use the instrument's DEFAULT count on switch — always.
             const newSc = isStr ? (instDef && instDef.default_string_count ? instDef.default_string_count : (counts[0] || 0)) : 0;
+            const newFc = isStr ? (instDef && instDef.default_fret_count ? instDef.default_fret_count : 22) : 0;
             const newKc = isKeys ? (instDef && instDef.default_key_count ? instDef.default_key_count : 88) : 0;
             const tunings = isStr ? _tuningsForInstrument(v, newSc) : [];
             // Remember last tuning per instrument: read the target profile's saved
@@ -666,6 +679,7 @@
             var patch = { instrument: v };
             if (isStr) {
                 patch.string_count = newSc;
+                patch.fret_count = newFc;
                 patch.tuning = (savedTuning && tunings.includes(savedTuning)) ? savedTuning : (tunings[0] || settings.tuning);
             }
             if (isKeys) {
@@ -688,6 +702,11 @@
                 tuning: tunings.includes(settings.tuning) ? settings.tuning : (tunings[0] || settings.tuning),
             });
             setWorkingInstrument(settings.instrument, newSc);
+            renderInstrument(); keepOpen();
+        }));
+        menu.querySelectorAll('[data-pill="frets"]').forEach((b) => b.addEventListener('click', async () => {
+            const newFc = Number(b.getAttribute('data-val'));
+            await saveSettings({ fret_count: newFc });
             renderInstrument(); keepOpen();
         }));
         menu.querySelectorAll('[data-pill="key_count"]').forEach((b) => b.addEventListener('click', async () => {

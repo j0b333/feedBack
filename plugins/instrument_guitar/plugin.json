@@ -11,6 +11,8 @@
     "kind": "stringed",
     "string_counts": [6, 7, 8],
     "default_string_count": 6,
+    "fret_counts": [21, 22, 24],
+    "default_fret_count": 22,
     "reference_pitch": 440.0,
     "detect_strategy": "pitch",
     "standard_tunings": {

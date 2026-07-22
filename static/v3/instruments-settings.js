@@ -102,6 +102,11 @@
                 html += _renderEditableStringCounts(inst, over);
             }
 
+            // ── Fret counts (stringed, editable) ─────
+            if (isStringed) {
+                html += _renderEditableFretCounts(inst, over);
+            }
+
             // ── Custom tunings (stringed, editable) ────
             if (isStringed) {
                 html += _renderTunings(inst, over);
@@ -194,6 +199,31 @@
             '<div class="flex gap-1 items-center">' +
             '<input type="number" data-add-sc="' + esc(inst.id) + '" min="1" max="18" placeholder="String count (e.g. 12)" class="bg-gray-800/50 border border-gray-700 rounded-md px-2 py-1 text-xs text-fb-text outline-none w-40 focus:border-fb-primary">' +
             '<button type="button" data-add-sc-btn="' + esc(inst.id) + '" class="bg-fb-primary/20 hover:bg-fb-primary/30 text-fb-primary text-xs px-2 py-1 rounded-md transition">Add</button>' +
+            '</div></div>';
+        return html;
+    }
+
+    function _renderEditableFretCounts(inst, over) {
+        var pluginCounts = inst.fret_counts || [];
+        var customCounts = over.custom_fret_counts || [];
+        var allCounts = pluginCounts.concat(customCounts.filter(function (c) { return pluginCounts.indexOf(c) < 0; }));
+
+        var html = '<div data-section="fret-counts" data-inst="' + esc(inst.id) + '">' +
+            '<div class="text-[0.625rem] uppercase tracking-wider text-fb-textDim mb-1.5">Fret counts</div>' +
+            '<div class="flex flex-wrap gap-1 mb-2">';
+        for (var i = 0; i < allCounts.length; i++) {
+            var isPlugin = pluginCounts.indexOf(allCounts[i]) >= 0;
+            var removeBtn = !isPlugin
+                ? '<button type="button" data-remove-fc="' + allCounts[i] + '" data-inst="' + esc(inst.id) + '" class="ml-1 text-red-400 hover:text-red-300 text-[0.625rem]" title="Remove">&times;</button>'
+                : '';
+            html += '<span class="text-xs bg-gray-800/50 border ' + (isPlugin ? 'border-gray-700' : 'border-green-700/50') + ' rounded-md px-2 py-0.5">' +
+                allCounts[i] + (allCounts[i] === inst.default_fret_count ? ' <span class="text-fb-primary text-[0.625rem]">(default)</span>' : '') + removeBtn +
+                '</span>';
+        }
+        html += '</div>' +
+            '<div class="flex gap-1 items-center">' +
+            '<input type="number" data-add-fc="' + esc(inst.id) + '" min="12" max="30" placeholder="Fret count (e.g. 24)" class="bg-gray-800/50 border border-gray-700 rounded-md px-2 py-1 text-xs text-fb-text outline-none w-40 focus:border-fb-primary">' +
+            '<button type="button" data-add-fc-btn="' + esc(inst.id) + '" class="bg-fb-primary/20 hover:bg-fb-primary/30 text-fb-primary text-xs px-2 py-1 rounded-md transition">Add</button>' +
             '</div></div>';
         return html;
     }
@@ -341,6 +371,40 @@
                 var over = getOverrides(instId);
                 if (over.custom_string_counts) {
                     over.custom_string_counts = over.custom_string_counts.filter(function (c) { return c !== sc; });
+                    saveOverridesDebounced();
+                }
+                renderInstruments();
+            });
+        });
+
+        // Add fret count
+        panel.querySelectorAll('[data-add-fc-btn]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var instId = btn.getAttribute('data-add-fc-btn');
+                var input = panel.querySelector('[data-add-fc="' + instId + '"]');
+                if (!input) return;
+                var fc = parseInt(input.value, 10);
+                if (!fc || fc < 12 || fc > 30) return;
+                var over = getOverrides(instId);
+                if (!over.custom_fret_counts) over.custom_fret_counts = [];
+                if (over.custom_fret_counts.indexOf(fc) < 0) {
+                    over.custom_fret_counts.push(fc);
+                    saveOverridesDebounced();
+                }
+                input.value = '';
+                renderInstruments();
+            });
+        });
+
+        // Remove fret count
+        panel.querySelectorAll('[data-remove-fc]').forEach(function (btn) {
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var instId = btn.getAttribute('data-inst');
+                var fc = parseInt(btn.getAttribute('data-remove-fc'), 10);
+                var over = getOverrides(instId);
+                if (over.custom_fret_counts) {
+                    over.custom_fret_counts = over.custom_fret_counts.filter(function (c) { return c !== fc; });
                     saveOverridesDebounced();
                 }
                 renderInstruments();
