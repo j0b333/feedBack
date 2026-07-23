@@ -1,5 +1,4 @@
 /*
- * fee[dB]ack v0.3.0 — Songs / Library (#v3-songs), native rebuild.
  *
  * A vanilla-JS library browser over the existing /api/library* endpoints:
  * provider selector (via the `library` capability, not DOM scraping), grid +
@@ -17,9 +16,7 @@
     const enc = encodeURIComponent;
     // Inverse of `enc` for matching a played song's filename back to a library
     // card. The `stats:recorded` event (like `song:loading`) carries the
-    // filename exactly as it was handed to `playSong` — i.e. encodeURIComponent'd
     // (see `playCard`, and the highway WS which decodeURIComponent's it). But
-    // cards key on the DECODED library filename (`cardKey` → `localFilename`),
     // and `/api/stats/best` is server-canonicalized to that same decoded key, so
     // an encoded filename matches no card and the post-play badge repaint silently
     // no-ops. Decode to land in the card/`state.accuracy` key space. Idempotent
@@ -31,8 +28,6 @@
     }
 
     const SORTS = [
-        ['artist', 'Artist A–Z'], ['artist-desc', 'Artist Z–A'],
-        ['title', 'Title A–Z'], ['title-desc', 'Title Z–A'],
         ['recent', 'Recently Added'], ['year-desc', 'Year (newest)'],
         ['year', 'Year (oldest)'], ['tuning', 'Tuning'],
         // Mastery = best accuracy across arrangements (song_stats); unscored songs
@@ -43,110 +38,6 @@
         ['difficulty', 'Difficulty (easiest first)'], ['difficulty-desc', 'Difficulty (hardest first)'],
     ];
     const FORMATS = [['', 'All formats'], ['sloppak', 'Feedpak'], ['loose', 'Folder']];
-    function _arrangementOptions() {
-        // Derive filter pill labels from instrument registry role names.
-        // When new instrument plugins are added, their arrangement type labels
-        // appear in the library filter drawer automatically.
-        var insts = sm && sm._instruments;
-        if (Array.isArray(insts) && insts.length) {
-            var out = [];
-            for (var i = 0; i < insts.length; i++) {
-                var roles = insts[i].roles || [];
-                for (var j = 0; j < roles.length; j++) {
-                    var label = roles[j].label;
-                    if (label && out.indexOf(label) < 0) out.push(label);
-                }
-            }
-            if (out.length) return out;
-        }
-        return ['Lead', 'Rhythm', 'Bass', 'Combo', 'Vocals'];
-    }
-
-    function _roleIcon(arrName) {
-        var insts = window.feedBack && window.feedBack._instruments;
-        if (!Array.isArray(insts)) return '\u25cf';
-        var name = (arrName || '').toLowerCase();
-        for (var i = 0; i < insts.length; i++) {
-            var inst = insts[i];
-            var roles = inst.roles || [];
-            for (var j = 0; j < roles.length; j++) {
-                var r = roles[j];
-                if (name === r.label.toLowerCase()) {
-                    if (inst.roles.length > 1) {
-                        return (inst.id[0] || '?').toUpperCase() + '<span class="text-[0.5rem]">' + (r.label[0] || '?').toUpperCase() + '</span>';
-                    }
-                    return (inst.id[0] || (r.label[0] || '?')).toUpperCase();
-                }
-                var names = r.arrangement_names || [];
-                for (var k = 0; k < names.length; k++) {
-                    if (name === names[k]) {
-                        if (inst.roles.length > 1) {
-                            return (inst.id[0] || '?').toUpperCase() + '<span class="text-[0.5rem]">' + (r.label[0] || '?').toUpperCase() + '</span>';
-                        }
-                        return (inst.id[0] || (r.label[0] || '?')).toUpperCase();
-                    }
-                }
-            }
-        }
-        return '\u25cf';
-    }
-
-    function _isPitchedArrangement(arrName) {
-        var insts = window.feedBack && window.feedBack._instruments;
-        if (!Array.isArray(insts)) return true;
-        var name = (arrName || '').toLowerCase();
-        for (var i = 0; i < insts.length; i++) {
-            var inst = insts[i];
-            var roles = inst.roles || [];
-            for (var j = 0; j < roles.length; j++) {
-                var r = roles[j];
-                if (name === r.label.toLowerCase()) return inst.detect_strategy === 'pitch';
-                var names = r.arrangement_names || [];
-                for (var k = 0; k < names.length; k++) {
-                    if (name === names[k]) return inst.detect_strategy === 'pitch';
-                }
-            }
-        }
-        return true;
-    }
-
-    function _instrumentArrangementNames(instrumentId) {
-        var insts = sm && sm._instruments;
-        if (!Array.isArray(insts)) return null;
-        for (var i = 0; i < insts.length; i++) {
-            if (insts[i].id === instrumentId && insts[i].roles) {
-                var names = [];
-                for (var j = 0; j < insts[i].roles.length; j++) {
-                    var label = insts[i].roles[j].label;
-                    if (label && names.indexOf(label) < 0) names.push(label);
-                }
-                return names.length ? names : null;
-            }
-        }
-        return null;
-    }
-
-    function _applyArrangementAutoFilter(instrumentId) {
-        var names = _instrumentArrangementNames(instrumentId);
-        if (!names) return false;
-        _arrAutoInstrument = instrumentId;
-        state.filters.arr_has = names.slice();
-        state.filters.arr_lacks = [];
-        return true;
-    }
-
-    function _activeInstrument() {
-        var id = sm && sm._activeInstrumentProfile;
-        if (!id) return null;
-        var insts = window.feedBack && window.feedBack._instruments;
-        if (!Array.isArray(insts)) return null;
-        for (var i = 0; i < insts.length; i++) {
-            if (id.indexOf(insts[i].id) === 0) return insts[i];
-        }
-        return null;
-    }
-
-    const STEMS = ['guitar', 'bass', 'drums', 'vocals', 'piano', 'other'];
     const PAGE_SIZE = 24;
     // Extra rows rendered above/below the viewport so a fast scroll doesn't flash
     // blank before the next window render lands.
@@ -155,7 +46,6 @@
     // Persisted "how I'm looking" prefs (sort / format / view / drawer filters).
     // The tester ask: "most users pick one sort and leave it" + remember filters.
     // The search query and the artist/album drill-down are navigational, so they
-    // are deliberately NOT persisted; cold start stays the neutral Artist A–Z.
     const PREFS_KEY = 'v3:songs-prefs';
     const btnCtrl = 'bg-gray-800/50 border border-gray-700 rounded-md px-3 py-2 text-sm text-fb-text outline-none focus:border-fb-primary';
 
@@ -164,29 +54,20 @@
         artist: '', album: '',
         grouping: true,     // one card per song (multi-chart grouping); persisted
 
-        filters: { arr_has: [], arr_lacks: [], stem_has: [], stem_lacks: [], lyrics: '', tunings: [], mastery: [], match: [], genre: [], tuningMatch: 'exact' },
-        page: 0, total: 0, loading: false, built: false, accuracy: {}, arrangementAccuracy: {}, tuningNames: [], genres: [],
         artistCatalog: [], renderedHash: '',
         scrollBound: false,
         songsById: {}, selectMode: false, selected: new Set(),
         railLetters: null, railLettersAreSongCounts: false, railJumping: false,
-        // ── Artist page (PR-B) ──
         // Non-null while the artist sub-page is showing (the artist's canonical
         // or raw name). The gates mirror the two Settings toggles: pages are
         // local-only and default ON; the external-links row is opt-in.
         artistPage: null,
-        artistReturnScroll: null,   // scrollTop to restore on ← Song Library
         artistPagesEnabled: true,
         artistLinksEnabled: false,
-        // ── Windowed (virtualized) grid, stage 2 of #636 item 3 ──
         // state.songs is a SPARSE array indexed by absolute library position
         // (0..total-1); only the fetched pages are populated and only the visible
-        // window ± overscan is ever in the DOM. The sizer element gives the
         // scrollbar the full-library geometry. See renderWindow / ensureWindow.
-        songs: [],            // sparse: absoluteIndex → song row
-        pageCursors: {},      // pageIndex → next_cursor (keyset forward fast-path)
         keysetOk: false,      // did page 0 return a non-null cursor (local + keyset sort)?
-        pageProms: {},        // pageIndex → in-flight fetch promise (de-dupe + await)
         epoch: 0,             // bumped on every reset; a stale in-flight fetch checks it
         geom: null,           // { cols, rowH, gap } measured from the live grid
         winRange: null,       // { start, end } last rendered, to skip redundant renders
@@ -194,8 +75,6 @@
         gridResizeBound: false,
     };
 
-    // ── A–Z jump rail ───────────────────────────────────────────────────────
-    // Ordered buckets shown on the rail: '#' (non-alphabetic) first, then A–Z.
     const RAIL_BUCKETS = ['#'].concat('ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''));
     // The rail only makes sense for the alphabetical sorts; for recent/year/
     // tuning a letter jump is meaningless, so it's hidden. Returns the column
@@ -206,8 +85,6 @@
         return null;
     }
     // The bucket a song falls in for the active sort: first char of the sort
-    // column, uppercased; anything non-A–Z (digits, symbols, accents, blank)
-    // buckets under '#'. Mirrors the server's letter grouping in query_stats —
     // which keys on raw SUBSTR(col, 1, 1) with no trim, and the grid ORDER BY
     // is likewise raw, so we must NOT trim here either: a leading-space title
     // sorts (and buckets) under '#' on both sides, keeping the rail consistent.
@@ -222,7 +99,6 @@
     function activeFilterCount() {
         const f = state.filters;
         return f.arr_has.length + f.arr_lacks.length + f.stem_has.length + f.stem_lacks.length +
-            (f.lyrics ? 1 : 0) + (f.tuningMatch === 'playable' ? 1 : f.tunings.length) + (f.mastery ? f.mastery.length : 0) +
             (f.match ? f.match.length : 0) + (f.genre ? f.genre.length : 0) +
             (state.artist ? 1 : 0) + (state.album ? 1 : 0);
     }
@@ -258,7 +134,6 @@
     // Restore the persisted view prefs once per page load, before the first
     // toolbar build so the selects render with the saved values. Every value is
     // validated against its known option list, so a stale/removed setting can
-    // never wedge the UI — it just falls back to the default.
     let _prefsRestored = false;
     function applySavedPrefs() {
         let saved;
@@ -272,7 +147,6 @@
         if (f && typeof f === 'object') {
             const arr = (x) => (Array.isArray(x) ? x.slice() : []);
             // mastery + match + genre are session-only facets (deliberately not
-            // persisted), but the restored object must still CARRY the keys —
             // the filter drawer indexes f.mastery/f.match/f.genre unconditionally,
             // so dropping them here breaks the drawer for anyone with saved prefs.
             state.filters = {
@@ -285,7 +159,6 @@
     }
     // Persist the current view prefs (best-effort; storage may be full/disabled).
     // Called from reload(), which every sort/format/filter/view change funnels
-    // through — so this is the single write point.
     function saveLibraryPrefs() {
         try {
             const f = state.filters;
@@ -305,7 +178,6 @@
         const main = _getV3MainScroller();
         // Geometry is now stable (the sizer reserves the full scroll height
         // regardless of how many cards are actually in the DOM), so the scroll
-        // position alone is enough to restore — no page-depth bookkeeping.
         const snap = {
             hash: _libraryStateHash(),
             scrollTop: main ? main.scrollTop : 0,
@@ -338,7 +210,6 @@
     }
 
     // The windowed grid keeps only a slice of cards in the DOM, so "intact" can no
-    // longer mean "has cards" — it means the grid + sizer chrome exist and page 0
     // is loaded (state.total known, first rows present), so renderWindow() can
     // repaint the right slice at any scroll position.
     function _gridDomIntact() {
@@ -353,18 +224,13 @@
         return !!(tree.querySelector('[data-fn]') || tree.querySelector('details'));
     }
 
-    // ── Multi-chart grouping (P5c, design §7.1) ─────────────────────────────
     // The grid queries with group=1 so charts of the same work collapse to ONE
-    // card — the representative (preferred/auto-pick) chart — with rows carrying
     // chart_count + work_key from the materialized work_display read-model
     // (P5a/P5b). group must ride BOTH the page fetch and the rail's stats fetch
-    // so page, total and sort_letters all count works identically — a
     // works-vs-charts mismatch would break the rail's cumulative-seek math and
     // the sizer geometry. Grouping is default-ON per the design, with a
-    // persisted toggle in the filter drawer (P5e) — OFF falls back to today's
     // one-card-per-chart. Only the local provider implements group=; smart
     // collections and remote providers ignore it and stay flat (their rows
-    // then carry no chart_count, so no ⚑ chips render).
     function groupingActive() { return state.grouping !== false; }
 
     function queryParams(extra, opts) {
@@ -382,21 +248,6 @@
         if (f.stem_has.length) p.set('stems_has', f.stem_has.join(','));
         if (f.stem_lacks.length) p.set('stems_lacks', f.stem_lacks.join(','));
         if (f.lyrics) p.set('has_lyrics', f.lyrics);
-        // The two modes answer different questions, so only one filters at a
-        // time: sending both would silently intersect them.
-        if (f.tunings.length && f.tuningMatch !== 'playable') p.set('tunings', f.tunings.join(','));
-        // Tell the server which instrument perspective to use for tuning
-        // columns (bass_tuning_name vs tuning_name, etc.).
-        var instId = sm && sm._activeInstrumentProfile;
-        // Which perspective the `tunings` filter + the tuning sort read.
-        // Uses the 3-perspective model (guitar-lead, guitar-rhythm, bass) from
-        // the active instrument profile. Drums/piano/keys fall through to the
-        // default guitar-lead perspective.
-        if (libInstrument() !== 'guitar-lead') p.set('instrument', libInstrument());
-        // "Playable without retuning": send the player's LIVE tuning and let the
-        // server do the pitch maths (the pitch tables live in lib/tunings.py —
-        // duplicating them here is how the two drift apart).
-        applyPlayableParams(p, f);
         if (f.mastery && f.mastery.length) p.set('mastery', f.mastery.join(','));
         if (f.match && f.match.length) p.set('match', f.match.join(','));
         if (f.genre && f.genre.length) p.set('genre', f.genre.join(','));
@@ -406,7 +257,6 @@
 
     // The active filter set as a smart-collection rule object (raw query-param
     // format the backend stores). Mirrors queryParams' filter fields, minus
-    // provider/page/size. Empty object → nothing worth saving as a collection.
     function currentFilterRules() {
         const f = state.filters, r = {};
         if (state.q) r.q = state.q;
@@ -445,7 +295,6 @@
             closeDrawer();
             if (col && col.id != null) state.provider = 'collection:' + col.id;
             await render();   // rebuilds the toolbar (provider picker now lists + selects it)
-        } catch (e) { /* offline / aborted — leave the drawer as-is */ }
     }
 
     function albumsForArtist(name) {
@@ -504,7 +353,6 @@
         if (treeBtn) treeBtn.className = 'px-3 py-2 text-sm ' + (state.view === 'tree' ? 'bg-fb-primary text-white' : 'text-fb-textDim');
         const folderBtn = document.getElementById('v3-songs-folder-btn');
         if (folderBtn) folderBtn.className = 'px-3 py-2 text-sm ' + (state.view === 'folder' ? 'bg-fb-primary text-white' : 'text-fb-textDim');
-        // Select button tracks state.selectMode — the screen-leave teardown clears
         // select mode, so a cached-DOM re-entry must re-style the button (and the
         // window re-renders without checkboxes via renderWindow's selectMode check).
         const selBtn = document.getElementById('v3-songs-select');
@@ -558,7 +406,6 @@
 
     async function jget(url) { try { const r = await fetch(url); return r.ok ? r.json() : null; } catch (e) { return null; } }
 
-    // ── Provider-aware song helpers ────────────────────────────────────────
     // Remote library providers (feedBack-plugin-remote-library-*) expose songs
     // by provider-owned id with their own art/sync/play flow. Reuse the legacy
     // app.js globals (the shared engine) so v3 behaves identically for remote
@@ -580,8 +427,6 @@
         return song.filename ? '/api/song/' + enc(song.filename) + '/art' + v : '';
     }
 
-    // Play a card: local (or already-synced remote) → playSong the local file;
-    // an unsynced remote song → sync it first, then play when ready.
     function playCard(song, arrIdx) {
         if (!song) return;
         _saveLibraryScrollSnapshot();
@@ -591,119 +436,14 @@
         if (window.syncLibrarySong && sid) window.syncLibrarySong(state.provider, sid, { playWhenReady: true });
     }
 
-    // Per-role accuracy helpers — find the arrangement matching the active
-    // instrument role and read its per-arrangement accuracy.
-    function _matchingArrangementIndex(song) {
-        if (!song || !song.arrangements || !song.arrangements.length) return null;
-        var want = state.filters.arr_has;
-        var activeProfileId = (sm && sm._activeInstrumentProfile) || '';
-        var activeRoleLabel = null;
-        if (activeProfileId) {
-            var insts = window.feedBack && window.feedBack._instruments;
-            if (Array.isArray(insts)) {
-                for (var ii = 0; ii < insts.length; ii++) {
-                    var ir = insts[ii].roles || [];
-                    for (var ij = 0; ij < ir.length; ij++) {
-                        if (activeProfileId === insts[ii].id + '-' + ir[ij].id) {
-                            activeRoleLabel = ir[ij].label;
-                            break;
                         }
-                    }
-                    if (activeRoleLabel) break;
-                }
-            }
-        }
-        if (activeRoleLabel) {
-            for (var i = 0; i < song.arrangements.length; i++) {
-                var a = song.arrangements[i];
-                var sn = a.smart_name || a.name || '';
-                if (sn === activeRoleLabel) return a.index != null ? a.index : i;
-            }
-            return null;
-        }
-        if (!want.length) return null;
-        for (var i = 0; i < song.arrangements.length; i++) {
-            var a2 = song.arrangements[i];
-            var sn2 = a2.smart_name || a2.name || '';
-            for (var j = 0; j < want.length; j++) {
-                if (sn2 === want[j]) return a2.index != null ? a2.index : i;
-            }
-        }
-        return null;
     }
 
-    function _perArrangementAccuracy(filename, arrIndex) {
-        var map = state.arrangementAccuracy[filename];
-        if (!map) return null;
-        return typeof map[arrIndex] === 'number' ? map[arrIndex] : null;
-    }
-
-    // Accuracy badge markup. `variant` is 'grid' (overlay pill on the card art,
-    // positioned `absolute bottom-0 right-0`) or 'tree' (inline `<span>`).
-    // Cards show per-role accuracy: the arrangement matching the current
-    // instrument role determines the displayed percentage, not the song-wide max.
-    // A hover overlay reveals all arrangements with their individual accuracies.
-    function accuracyBadge(filename, variant, song) {
-        if (!song && state.songsById) song = state.songsById[filename];
-        var acc = null;
-        var arrIdx = song ? _matchingArrangementIndex(song) : null;
-        var hasMatchingArrangement = arrIdx != null;
-        if (hasMatchingArrangement) {
-            acc = _perArrangementAccuracy(filename, arrIdx);
-        }
-        var hasArr = song && song.arrangements && song.arrangements.length > 0;
-        if (acc == null && !hasArr) return '';
-
-        var pct = acc != null ? Math.floor(acc * 100) : null;
-        var displayLabel;
-        if (pct != null) {
-            displayLabel = pct + '%';
-        } else if (!state.filters.arr_has.length && !hasMatchingArrangement) {
-            displayLabel = 'n/a';
-        } else {
-            displayLabel = '\u2014 %';
-        }
-        if (variant === 'tree') {
-            var color = acc != null && acc >= MASTERY_ACCURACY ? 'text-fb-good' : acc != null && acc >= 0.5 ? 'text-fb-mid' : 'text-fb-low';
-            return '<span class="fb-acc-badge text-xs font-bold ' + color + '">' + displayLabel + '</span>';
-        }
-
-        var hoverOverlay = '';
-        if (song && song.arrangements && song.arrangements.length > 0) {
-            var songTuning = song.tuning_name || '';
-            var items = '';
-            for (var ai = 0; ai < song.arrangements.length; ai++) {
-                var a = song.arrangements[ai];
-                var aiIdx = a.index != null ? a.index : ai;
-                var aAcc = _perArrangementAccuracy(filename, aiIdx);
-                var aName = a.smart_name || a.name || ('#' + aiIdx);
-                var aLabel = aAcc != null ? Math.floor(aAcc * 100) + '%' : '\u2014';
-                var aColor = aAcc != null
-                    ? (aAcc >= MASTERY_ACCURACY ? 'text-fb-good' : aAcc >= 0.5 ? 'text-fb-mid' : 'text-fb-low')
-                    : 'text-gray-600';
-                var isPitched = _isPitchedArrangement(aName);
-                var tuningPart = isPitched && songTuning ? ' \u00b7 ' + esc(songTuning) : '';
-                items += '<div class="flex items-center gap-1 px-2 py-0.5"><span class="text-xs text-fb-textDim flex-1">' + esc(aName) + tuningPart + '</span><span class="text-xs font-bold ' + aColor + '">' + aLabel + '</span></div>';
-            }
-            hoverOverlay = '<div class="opacity-0 group-hover:opacity-100 transition" style="position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,0.8);border-radius:0 0 0.5rem 0.5rem;z-index:20;pointer-events:none">' + items + '</div>';
-        }
-
-        var badgeColor = acc != null ? (acc >= MASTERY_ACCURACY ? 'rgba(34,197,94,0.9)' : (acc >= 0.5 ? 'rgba(234,179,8,0.9)' : 'rgba(239,68,68,0.9)')) : 'rgba(75,85,99,0.9)';
-        var badgeText = acc != null && acc >= 0.5 && acc < MASTERY_ACCURACY ? 'text-black' : 'text-white';
-        var borderColor = acc != null ? (acc >= MASTERY_ACCURACY ? '#22c55e' : (acc >= 0.5 ? '#eab308' : '#ef4444')) : '#4b5563';
-        return '<span class="fb-acc-badge absolute bottom-0 right-0 px-2 py-0.5 rounded-tl-md text-xs font-bold flex items-center gap-1 opacity-100 group-hover:opacity-0 transition border-l-2 border-t-2 ' + badgeText + '" style="background:' + badgeColor + ';border-color:' + borderColor + '">' +
-            displayLabel + '</span>' + hoverOverlay;
-    }
-
-    // ── Metadata-refresh per-tile state (the "Refresh Metadata" batch) ─────────
     // A transient badge painted ONLY while a metadata refresh is running: the
-    // songs actually being (re)matched animate queued → working → done. Keyed by
     // the card's data-fn (= the local filename the enrichment cache keys on).
     // Empty for every song outside a refresh, so an idle card is byte-identical
     // to before (keeps the windowed grid's height math untouched). Honest state
-    // transitions, NOT a fake per-song %: a match is binary (design §11).
     const _metaTile = {};   // fn -> 'queued' | 'working' | 'done' | 'nochange'
-    // Cards whose enrichment landed 'failed' (from the grid payload) — tracked so
     // the PERSISTENT "no match" badge survives a batch tile clearing (a
     // _patchCardEnrich with no flag falls back to this instead of wiping it).
     // Populated as cards render (enrichBadge is called per card with the flag).
@@ -711,21 +451,14 @@
     function enrichBadge(fn, unmatched) {
         if (unmatched !== undefined) { if (unmatched) _unmatched.add(fn); else _unmatched.delete(fn); }
         // A live batch tile wins over the resting no-match marker (they never
-        // coexist — the batch clears its tiles when it finishes).
         const st = _metaTile[fn] || (_unmatched.has(fn) ? 'nomatch' : null);
         if (!st) return '';
         const M = {
-            queued:   ['bg-black/60 text-fb-textDim', '• Queued', ''],
-            working:  ['bg-fb-primary text-white', '⟳ Matching…', ''],
-            done:     ['bg-fb-good/90 text-black', '✓ Updated', ''],
-            nochange: ['bg-black/60 text-fb-textDim', '— No match', ''],
             // Resting indicator: subtle, so a mostly-unmatched library isn't a
-            // wall of loud badges. Clickable — a one-click handoff into the
             // Fix-metadata popup for this song (see the [data-meta-fix] wiring).
             nomatch:  ['bg-black/60 text-fb-textDim', 'No match', 'Click to fix the metadata by hand'],
         };
         const conf = M[st] || M.queued;
-        const fixable = st === 'nomatch';   // resting badge → opens Fix-metadata
         // top-10 clears the tuning chip (top-2) in both normal and select mode;
         // z-20 sits it above the art. Batch states are non-interactive; the
         // resting "no match" badge is the handoff into the popup.
@@ -747,16 +480,12 @@
     // Set when a library scan / DLC-folder change happened while this screen was
     // off (or showing a stale, e.g. pre-DLC empty, grid). The grid's cached DOM /
     // snapshot would otherwise survive a sidebar return, so we force a full
-    // re-fetch on the next entry. (feedBack — "No DLC until restart".)
     let _libraryDirty = false;
-    let _arrAutoInstrument = null;
-    let _autoFilterEnabled = true;
 
     function repaintAccuracy(key) {
         const apply = (el, variant) => {
             if (el.getAttribute('data-fn') !== key) return;
             const old = el.querySelector('.fb-acc-badge');
-            const html = accuracyBadge(key, variant, state.songsById[key]);
             if (variant === 'grid') {
                 const art = el.querySelector('[data-v3-play]');
                 if (!art) return;
@@ -765,7 +494,6 @@
             } else if (old) {
                 if (html) old.outerHTML = html; else old.remove();
             } else if (html) {
-                // No prior badge in this row — insert before the favorite button
                 // so it keeps its slot (after the format chip).
                 const fav = el.querySelector('[data-fav]');
                 if (fav) fav.insertAdjacentHTML('beforebegin', html);
@@ -779,22 +507,18 @@
     async function applyScoreRefresh() {
         if (!_dirtyScores.size) return;
         const fresh = await jget('/api/stats/best');
-        const freshArr = await jget('/api/stats/best-by-arrangement');
         if (!fresh) return;
         state.accuracy = fresh;
-        if (freshArr) state.arrangementAccuracy = freshArr;
         const keys = Array.from(_dirtyScores);
         _dirtyScores.clear();
         keys.forEach(repaintAccuracy);
         renderLibraryHome();
     }
 
-    // ── Practice-aware library home (repertoire meter + "Keep practicing") ─────
     // The meter reads state.accuracy (/api/stats/best = {filename: best_accuracy});
     // the shelf reads the growth-edge recommender (/api/library/practice-suggestions,
     // P3). A song is "in your repertoire" at the same threshold the green accuracy
     // badge uses (>= 0.9); a started song below that is "in progress". This is
-    // descriptive encouragement — it never gates content, decays, or nags (the
     // goal-gradient / endowed-progress idea, kept healthy).
     const MASTERY_ACCURACY = 0.9;
 
@@ -809,7 +533,6 @@
 
     // The home block is the unfiltered "front door": shown on the grid view when
     // the user isn't running a focused query (search / filter) or selecting.
-    // Local provider only — the meter's mastered count and the shelf both read
     // local practice stats (state.accuracy / the practice-suggestions endpoint),
     // so on a remote provider they'd mix local numerators with a remote song total
     // and play local files while browsing a remote library. Hide it there.
@@ -840,7 +563,6 @@
         const total = (stats && (stats.total_songs ?? stats.total)) || 0;
         if (total <= 0) { host.classList.add('hidden'); return; }    // empty library
         // Shelf = the growth-edge recommender (P3): attempted-but-not-mastered
-        // songs ordered by difficulty-appropriateness × mastery-proximity, so it
         // points at the version worth practicing next rather than just the most
         // recent. The server already gates (not-mastered) + aggregates per song,
         // so the rows are the shelf as-is; each row's `arrangement` is the one
@@ -849,7 +571,6 @@
 
         const { mastered, learning } = _repertoireCounts();
         // Day-one zero-state (launch polish): no practice data and no real
-        // growth-edge rows → an invitational meter, never "0 of N". Starter
         // rows are the server's no-attempts fallback, so they count as "no
         // practice yet" too.
         const starterShelf = shelf.length > 0 && !!shelf[0].starter;
@@ -883,13 +604,10 @@
                 '<button class="v3-kp-card group text-left" data-kp="' + esc(r.filename) + '" data-arr="' + esc(r.arrangement != null ? r.arrangement : '') + '" title="' + esc(r.title) + '">' +
                 '<div class="relative aspect-square rounded-lg overflow-hidden bg-fb-card">' +
                 '<img src="' + esc(r.art_url) + '" alt="" loading="lazy" decoding="async" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" onerror="this.style.visibility=\'hidden\'">' +
-                accuracyBadge(r.filename, 'grid') +
                 '</div>' +
                 '<div class="mt-1 text-sm text-fb-text truncate">' + esc(r.title) + '</div>' +
                 '<div class="text-xs text-fb-textDim truncate">' + esc(r.artist) + '</div>' +
                 '</button>').join('');
-            // Starter rows → the invitational "Start here" framing; real
-            // growth-edge rows → the usual "Keep practicing". Same cards.
             const header = starterShelf
                 ? '<h3 class="text-sm font-semibold text-fb-text">Start here</h3>' +
                   '<div class="text-xs text-fb-textDim mb-2">a few approachable songs to kick things off</div>'
@@ -903,9 +621,7 @@
         host.innerHTML = meter + shelfHtml;
         host.classList.remove('hidden');
         // The home block sits above the grid sizer, so its height shifts where the
-        // window maps in scroll space — repaint the window once it's laid out.
         if (state.view === 'grid') requestWindowRender();
-        // Wire shelf cards → play (mirrors playCard's local path; suggestions are
         // always local-library rows, so no provider sync is needed).
         host.querySelectorAll('.v3-kp-card').forEach((btn) => btn.addEventListener('click', () => {
             const fn = btn.getAttribute('data-kp');
@@ -924,7 +640,6 @@
         renderLibraryHome();
     }
 
-    // Source format of a song — prefer the server's `format` field, fall back
     // to the filename extension. Returns '' for unknown.
     function fmtLabel(song) {
         let f = (song.format || '').toLowerCase();
@@ -952,12 +667,9 @@
         const tags = song.tags || [];
         if (d == null && !tags.length) return '';
         let out = '<div class="absolute top-2 right-2 flex gap-1 opacity-100 group-hover:opacity-0 transition pointer-events-none">';
-        if (d != null) out += '<span class="bg-black/60 text-white text-[0.625rem] font-bold px-1.5 py-0.5 rounded" title="Your difficulty: ' + esc(DIFF_LABELS[d] || d) + '">◆' + esc(d) + '</span>';
-        if (tags.length) out += '<span class="bg-black/60 text-white text-[0.625rem] font-bold px-1.5 py-0.5 rounded" title="Tags: ' + esc(tags.join(', ')) + '">🏷' + tags.length + '</span>';
         return out + '</div>';
     }
 
-    // Clickable arrangement chips — one <button data-arr="<index>"> per
     // arrangement. wireCards() binds the click to playCard(song, index), which
     // opens THAT arrangement in the highway via playSong(filename, index).
     // Shared by the grid card and the tree row so both views render the same
@@ -968,54 +680,40 @@
             '<button data-arr="' + esc(a.index != null ? a.index : '') + '" title="Play ' + esc(a.name) + '" class="text-[0.625rem] px-1.5 py-0.5 rounded bg-gray-800/60 text-fb-textDim hover:bg-fb-primary hover:text-white transition">' + esc(a.name) + '</button>').join('');
     }
 
-    // ⚑ multi-chart chip (P5c, design §7.1): the persistent "other versions
     // exist" cue on a grouped card. Rendered ONLY when the grouped query says
     // this card stands for 2+ charts of one work (chart_count = work_display
-    // group_size, P5a) — a single-chart card emits nothing, so its markup stays
     // byte-identical to an ungrouped card. First in the chip row + shrink-0 so
     // the overflow-hidden row clips arrangement chips before it ever clips the
     // cue. Clicking it opens the Charts drawer (see wireCards).
     function chartsChipHtml(song) {
         const n = song.chart_count;
         if (!(n >= 2) || !song.work_key) return '';
-        return '<button data-charts="' + esc(song.work_key) + '" title="' + n + ' charts of this song" aria-label="' + n + ' charts of this song" class="shrink-0 text-[0.625rem] px-1.5 py-0.5 rounded bg-fb-primary/15 text-fb-primary border border-fb-primary/40 hover:bg-fb-primary hover:text-white transition">⚑ ' + n + ' charts</button>';
     }
 
-    // ── Tuning-match flags (working-tuning PR 6) ───────────────────────────────
     // Colour each song's tuning chip by whether your CURRENT working tuning covers
     // it: green = play it now, amber = needs a retune. Uses the tuner plugin's
-    // coverage check (async) + the host workingTuning state — BOTH feature-detected,
     // so without them the chips render exactly as before. Decoration runs AFTER the
     // (sync) window paint so scrolling stays snappy; a token cancels a superseded pass.
     let _tuningDecorToken = 0;
-    // The instrument the current grid was queried/painted for, so a
-    // working-tuning change can tell a guitar<->bass SWITCH (re-query) from a
-    // retune within the same instrument (re-colour only).
-    let _lastRenderInstrument = null;
     function _applyChipMatch(chip, stateName) {
         chip.classList.remove('bg-fb-mid', 'bg-emerald-500', 'bg-amber-400');
         chip.classList.add(stateName === 'match' ? 'bg-emerald-500'
             : stateName === 'retune' ? 'bg-amber-400' : 'bg-fb-mid');
         if (!chip.dataset.baseTitle) chip.dataset.baseTitle = chip.getAttribute('title') || '';
         chip.setAttribute('title', chip.dataset.baseTitle + (stateName === 'match'
-            ? ' — matches your tuning' : stateName === 'retune' ? ' — needs a retune' : ''));
     }
     async function decorateTuningChips(grid) {
         if (!grid) return;
         const cov = window._tunerAutoOpen && window._tunerAutoOpen.coverageReport;
         const hasWT = window.feedBack && window.feedBack.workingTuning
             && typeof window.feedBack.workingTuning.get === 'function';
-        if (typeof cov !== 'function' || !hasWT) return;   // feature-detect → no flags
         const token = ++_tuningDecorToken;
         const chips = grid.querySelectorAll('[data-tuning-chip][data-tuning-offsets]');
         for (const chip of chips) {
             const offs = chip.getAttribute('data-tuning-offsets').split(',').map(Number);
             if (!offs.length || offs.some((n) => !isFinite(n))) continue;
-            // Pass the instrument so coverage uses the right base pitches.
             const arrangement = chip.dataset.tuningBass === '1' ? 'Bass' : 'Lead';
-            const instId = chip.dataset.tuningInstrument || (chip.dataset.tuningBass === '1' ? 'bass' : 'guitar');
             let rep = null;
-            try { rep = await cov({ tuning: offs, stringCount: offs.length, arrangement: arrangement, instrument: instId }); } catch (_) { rep = null; }
             if (token !== _tuningDecorToken) return;   // superseded by a re-paint / tuning change
             if (rep) _applyChipMatch(chip, rep.covered ? 'match' : 'retune');
         }
@@ -1024,76 +722,34 @@
     function songCard(song) {
         const fav = song.favorite;
         const key = cardKey(song);
-        // §7.1 display-chart switch (P5e): under a chart-intrinsic filter the
-        // server may attach `display_chart` — the member that MATCHES the
         // filter when the representative doesn't. The card SHOWS and PLAYS
         // that chart, while the row identity (sort keys, data-fn, the
         // accuracy/heart anchor = the preferred chart) stays the rep's.
         const shown = song.display_chart ? Object.assign({}, song, song.display_chart) : song;
         // In select mode the checkbox occupies top-2 left-2, so shift the
         // tuning chip right (left-9) to avoid overlapping it.
-        // Bass players see the bass chart's tuning (guitar fallback) — the card
-        // must agree with the facet/filter or the grid contradicts the pills.
-        const shownTuning = shownTuningName(shown);
         const tuningLabel = (typeof window.displayTuningName === 'function')
-            ? window.displayTuningName(shownTuning)
-            : (shownTuning || '');
         let tuning = '';
         if (tuningLabel) {
             const rawOffsets = (typeof window.parseRawTuningOffsets === 'function')
                 ? (window.parseRawTuningOffsets(shown.tuning_offsets)
-                    || window.parseRawTuningOffsets(shownTuningOffsets(shown))
-                    || window.parseRawTuningOffsets(shownTuning)
-                    || window.parseRawTuningOffsets(shown.tuning))
                 : null;
             const targetNotes = (tuningLabel === 'Custom Tuning' && rawOffsets
                 && typeof window.displayTuningTargets === 'function')
                 ? window.displayTuningTargets(rawOffsets, { tuningName: tuningLabel })
                 : '';
-            // Mark a tuning we INFERRED from the guitar chart (this song has no
-            // bass arrangement) so a bass player isn't shown a borrowed tuning
-            // as if it were their part's. `~` keeps the chip compact; the title
-            // spells it out.
-            const inferred = shown.tuning_inferred === true;
-            const badgeTitle = (targetNotes
                 ? ('Custom Tuning: ' + targetNotes)
-                : tuningLabel)
-                + (inferred ? ' — from the guitar chart (no bass arrangement)' : '');
-            const pos = 'absolute top-0 rounded-br-md ' + (state.selectMode ? 'left-9' : 'left-0');
             // Tag the chip with its offsets so decorateTuningChips() can colour it
             // green (matches your current tuning) / amber (needs a retune) after paint.
             // Also flag a bass-only song (every arrangement is a bass part) so coverage
-            // scores its bass tuning against the bass base pitches, not guitar — otherwise
             // a 4-string bass tuning read as guitar can false-match a guitar player.
             const chipArrs = shown.arrangements || [];
-            // Bass either because the chip is SHOWING the bass chart's tuning
-            // Which instrument this chip represents — read from the active
-            // instrument profile in the registry, falling back to the
-            // 3-perspective bass/lead detection for the tuner plugin's coverage
-            // checker (which only knows 'Bass' and 'Lead' arrangement labels).
-            const inst = _activeInstrument();
-            const instId = inst ? inst.id : (libInstrument() === 'bass' ? 'bass' : 'guitar');
-            const isBass = instId === 'bass'
-                || (chipArrs.length > 0
-                    && chipArrs.every((a) => /\bbass\b/i.test((a && a.name) || '')));
-            const stringCount = inst && inst.string_count ? inst.string_count : (isBass ? 4 : 6);
-            // Truncate offsets to the instrument's string count so the
-            // coverage checker compares the right number of strings.
-            let chipOffsets = rawOffsets;
-            if (chipOffsets && chipOffsets.length > stringCount) chipOffsets = chipOffsets.slice(0, stringCount);
-            const matchAttr = (chipOffsets && chipOffsets.length)
-                ? ' data-tuning-chip data-tuning-offsets="' + esc(chipOffsets.join(',')) + '"'
-                    + ' data-tuning-instrument="' + esc(instId) + '"'
-                    + (isBass ? ' data-tuning-bass="1"' : '') : '';
             if (targetNotes) {
-                tuning = '<span class="' + pos + ' bg-fb-mid text-black text-[0.5625rem] font-bold px-1.5 py-0.5 rounded-sm leading-tight max-w-[5.5rem] text-center opacity-100 group-hover:opacity-0 transition"' + matchAttr + ' title="' + esc(badgeTitle) + '">'
                     + esc('Custom Tuning') + '<br><span class="font-semibold tracking-wide">' + esc(targetNotes) + '</span></span>';
             } else {
-                tuning = '<span class="' + pos + ' bg-fb-mid text-black text-[0.625rem] font-bold px-1.5 py-0.5 rounded-sm opacity-100 group-hover:opacity-0 transition"' + matchAttr + ' title="' + esc(badgeTitle) + '">' + esc(tuningLabel) + (inferred ? '<span class="opacity-60"> ~</span>' : '') + '</span>';
             }
         }
         // Display-only (pointer-events-none) so a click falls through to the
-        // card's data-v3-play handler, which owns the toggle — avoids double-toggle.
         const checkbox = state.selectMode
             ? '<input type="checkbox" data-select class="absolute top-2 left-2 z-20 w-5 h-5 accent-fb-primary pointer-events-none"' + (state.selected.has(key) ? ' checked' : '') + '>'
             : '';
@@ -1101,9 +757,7 @@
         const chartsChip = chartsChipHtml(song);
         // Plugin-contributed card actions placed 'inline' (in the hover action
         // row) or 'overlay' (centered over the art). Menu-placed actions live in
-        // the ⋮ menu (openCardMenu); rendering these here means plugins using
         // those placements are no longer silently dropped. No bundled action
-        // uses them, so for the stock library both strings are empty — the card
         // renders exactly as before.
         const reg = sm && sm.libraryCardActions;
         const acts = (reg && typeof reg.list === 'function') ? reg.list(song) : [];
@@ -1112,7 +766,6 @@
             (a.enabled === false ? ' disabled' : '') +
             ' class="px-2 h-7 min-w-[1.75rem] rounded-full bg-black/55 hover:bg-black/75 flex items-center justify-center text-xs leading-none ' +
             (a.enabled === false ? 'opacity-40 cursor-not-allowed ' : '') +
-            (a.destructive ? 'text-fb-accent' : 'text-white') + '">' + esc(a.icon || a.label || '•') + '</button>';
         const inlineBtns = acts.filter((a) => a.placement === 'inline').map(actBtn).join('');
         const overlayActs = acts.filter((a) => a.placement === 'overlay');
         const overlay = overlayActs.length
@@ -1124,15 +777,10 @@
         return '<div class="group relative" data-fn="' + esc(key) + '" data-letter="' + esc(songBucket(song)) + '" data-library-song="' + esc(songId(song)) + '" data-library-provider="' + esc(state.provider) + '">' +
             '<div class="relative aspect-square rounded-lg overflow-hidden bg-fb-card cursor-pointer' + selRing + '" data-v3-play>' +
             '<img src="' + esc(artUrl(shown)) + '" alt="" loading="lazy" decoding="async" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" onerror="this.style.visibility=\'hidden\'">' +
-            tuning + checkbox + accuracyBadge(key, 'grid', song) + fmtBadge(shown) + personalBadges(song) + enrichBadge(key, song.unmatched) + overlay +
             '<div class="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition">' +
             inlineBtns +
-            '<button data-fav data-fav-idle="text-white" title="Favorite" aria-label="Favorite" aria-pressed="' + (fav ? 'true' : 'false') + '" class="w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-sm ' + (fav ? 'text-fb-accent' : 'text-white') + '">' + (fav ? '♥' : '♡') + '</button>' +
-            '<button data-save title="Save for later" aria-label="Save for later" class="w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white text-sm">🔖</button>' +
-            '<button data-menu title="More" aria-label="More actions" class="w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 flex items-center justify-center text-white text-sm leading-none">⋮</button>' +
             '</div></div>' +
             '<div class="mt-1 text-sm text-fb-text truncate" title="' + esc(shown.title) + '">' + esc(shown.title) + '</div>' +
-            // Artist line → the artist page (PR-B, entry point 2). The text
             // block sits OUTSIDE the data-v3-play hitbox, so making it a
             // button steals no play clicks. Same classes/line-height as the
             // plain div (uniform card height is what makes the windowed
@@ -1142,7 +790,6 @@
                 ? '<button data-v3-artist class="block w-full text-left text-xs text-fb-textDim truncate hover:text-fb-primary transition" title="Go to ' + esc(song.artist) + '">' + esc(song.artist) + '</button>'
                 : '<div class="text-xs text-fb-textDim truncate">' + esc(song.artist) + '</div>') +
             // Always emit the chip row (even when empty) at a FIXED single-line
-            // height — uniform card height is what makes the windowed grid's
             // absolute-position math exact (.v3-card-chips in v3.css).
             '<div class="v3-card-chips flex gap-1 mt-1">' + chartsChip + arrChips + '</div>' +
             '</div>';
@@ -1152,50 +799,35 @@
     // (core Edit/Retune + any plugin-registered actions).
     let _closeCardMenu = null;   // tears down the currently-open card menu + its document closer
     function openCardMenu(cardEl, song, anchorBtn, pos) {
-        // Fully close any already-open menu first — removing just the DOM node
         // (as before) would orphan its document-level click closer.
         if (_closeCardMenu) _closeCardMenu();
         const reg = sm && sm.libraryCardActions;
-        // Only show actions intended for the overflow menu — actions placed
         // 'inline'/'overlay' get their own affordances on the card (see songCard).
         // Undefined placement defaults to the menu.
         const items = (reg ? reg.list(song) : []).filter((a) => !a.placement || a.placement === 'menu');
         const menu = document.createElement('div');
         // pos (right-click) positions the menu at the pointer via `fixed`;
-        // the ⋮ button keeps the absolute top-right anchor.
         menu.className = 'v3-card-menu z-30 min-w-[10rem] bg-fb-card border border-fb-border/60 rounded-lg shadow-xl py-1 text-sm ' + (pos ? 'fixed' : 'absolute top-10 right-2');
         // Multi-chart entries (P5d): a grouped grid row carries chart_count +
         // work_key (P5a annotation), so the menu knows inline whether this card
-        // stands for versions. Local library only — the work API is local.
         const canCharts = state.provider === 'local' && song.work_key && song.chart_count >= 2;
-        // Play follows the DISPLAYED chart (see wireCards) — under an intrinsic
         // filter that's the matching member, not the representative.
         const playTarget = song.display_chart ? Object.assign({}, song, song.display_chart) : song;
         const rows = [
             { id: '__play', label: 'Play', run: () => { _saveLibraryScrollSnapshot(); window.playSong && window.playSong(enc(playTarget.filename)); } },
             ...(canCharts ? [
-                { id: '__charts', label: 'Charts (' + song.chart_count + ')…' },
-                { id: '__playver', label: 'Play version ▸' },
             ] : []),
-            // Undo for the drawer's "Split out" (P5e) — a split chart is its
-            // own singleton card (no ⚑ chip), so this is its only way back.
             ...(state.provider === 'local' && song.is_split
                 ? [{ id: '__unsplit', label: 'Rejoin other versions' }] : []),
             { id: '__playlist', label: 'Add to playlist' },
             { id: '__save', label: 'Save for later' },
-            // Artist page (PR-B, entry point 1) — local library only (the
             // page reads the local DB) and gated on the Settings toggle.
             ...(state.provider === 'local' && song.artist && state.artistPagesEnabled !== false
                 ? [{ id: '__artist', label: 'Go to artist' }] : []),
             ...items.map((a) => ({ id: a.id, label: a.label, destructive: a.destructive, enabled: a.enabled, plugin: a.pluginId })),
-            // Metadata + file actions (R2) — local library only (they all
-            // address the local DB / filesystem). Both openers (⋮ and
             // right-click) share this list, so parity is structural.
             ...(state.provider === 'local' && song.filename ? [
-                { id: '__fixmatch', label: 'Fix metadata…' },
-                { id: '__cover', label: 'Change cover…' },
                 { id: '__refreshmeta', label: 'Refresh metadata' },
-                { id: '__getinfo', label: 'Get info…' },
                 { id: '__remove', label: 'Remove from library', destructive: true },
             ] : []),
         ];
@@ -1224,7 +856,6 @@
         menu.querySelectorAll('[data-act]').forEach((b) => b.addEventListener('click', async (e) => {
             e.stopPropagation();
             const id = b.getAttribute('data-act');
-            // 'Play version ▸' swaps THIS menu's rows for the work's charts —
             // it must expand in place, so it's the one entry that doesn't close.
             if (id === '__playver') { await _expandPlayVersions(menu, song, closeMenu); return; }
             closeMenu();
@@ -1238,7 +869,6 @@
             if (id === '__save') { if (window.v3Saved) await window.v3Saved.toggle(song.filename); return; }
             if (id === '__artist') { openArtistPage(song.artist); return; }
             // Per-chart metadata actions follow the DISPLAYED chart (playTarget),
-            // like Play — under an intrinsic filter that's the matching member,
             // not the group representative. (__remove stays on `song`: it needs
             // the group's work_key/chart_count and pre-ticks the shown chart.)
             if (id === '__fixmatch') { if (window.__fbFixMatch) window.__fbFixMatch(playTarget); return; }
@@ -1248,7 +878,6 @@
             }
             if (id === '__refreshmeta') {
                 // Silent on success (hearing-safe, like the rest of the match
-                // layer) — the re-match trickles in through the normal pass.
                 await jsend('POST', '/api/enrichment/refresh/' + enc(playTarget.filename));
                 return;
             }
@@ -1257,9 +886,6 @@
             if (reg) await reg.run(id, song, { source: 'v3-songs' });
         }));
         // Tree rows ride the (ungrouped) artists endpoint, so they don't carry
-        // chart_count/work_key — resolve the work lazily and slot a
-        // "Charts (N)…" entry into the still-open menu when versions exist.
-        // Grid rows already carry both (chart_count defined ⇒ no fetch).
         if (state.provider === 'local' && song.chart_count === undefined && song.filename) {
             jget('/api/chart/' + enc(song.filename) + '/work').then((w) => {
                 if (!w || !menu.isConnected) return;
@@ -1271,7 +897,6 @@
                     menu.appendChild(b);
                 };
                 if (w.chart_count >= 2 && w.work_key) {
-                    addEntry('Charts (' + w.chart_count + ')…', () => openChartsDrawer(w.work_key, song));
                 }
                 if (w.is_split) {
                     addEntry('Rejoin other versions', async () => {
@@ -1283,10 +908,7 @@
         setTimeout(() => document.addEventListener('click', closer), 0);
     }
 
-    // 'Play version ▸' (P5d): swap the ⋮ menu's rows for the work's charts;
-    // picking one plays that chart directly. A one-off alternate play — the
     // keeper/headline doesn't move (stats record to the played chart's own
-    // filename), which is the design's "casual try ≠ deliberate adopt".
     async function _expandPlayVersions(menu, song, closeMenu) {
         const data = await jget('/api/work/' + enc(song.work_key) + '/charts');
         if (!data || !Array.isArray(data.charts) || !data.charts.length || !menu.isConnected) return;
@@ -1294,7 +916,6 @@
             const tl = (typeof window.displayTuningName === 'function')
                 ? window.displayTuningName(c.tuning_name || c.tuning) : (c.tuning_name || '');
             return '<button data-ver="' + esc(c.filename) + '" title="' + esc(c.filename) + '" class="w-full text-left px-3 py-1.5 hover:bg-fb-card/60 text-fb-text">' +
-                (c.is_representative ? '<span class="text-fb-primary">●</span> ' : '') + esc(c.title) +
                 (tl ? '<span class="text-[0.625rem] text-fb-textDim ml-1">' + esc(tl) + '</span>' : '') +
                 '</button>';
         }).join('');
@@ -1307,10 +928,7 @@
         }));
     }
 
-    // ── Remove from library (R2) ───────────────────────────────────────────--
     // On a single-chart song: confirm + delete, as the Details drawer does.
-    // On a multi-chart work: "remove the song" is ambiguous — a grouped card
-    // stands for several files — so an interstitial lists EVERY version for
     // select/multi-select and deletes exactly what the user picked, one file
     // or the whole set.
     async function removeSongsFlow(song) {
@@ -1350,8 +968,6 @@
     }
 
     // The multi-version interstitial: a centred modal (the Tidy-up idiom)
-    // listing all charts of the work with checkboxes — the card's own chart
-    // pre-checked — so "delete" does exactly what the user means, whether
     // that's one file or the batch.
     function openVersionRemoveModal(song, charts) {
         const sel = new Set([song.display_chart ? song.display_chart.filename : song.filename]);
@@ -1368,19 +984,15 @@
                 const tl = (typeof window.displayTuningName === 'function')
                     ? window.displayTuningName(c.tuning_name || c.tuning) : (c.tuning_name || '');
                 const meta = [tl, (c.arrangements || []).map((a) => a.name).join('/'), c.format]
-                    .filter(Boolean).join(' · ');
                 return '<label class="flex items-start gap-2 px-2 py-1.5 rounded hover:bg-fb-card/50 cursor-pointer">' +
                     '<input type="checkbox" data-rm="' + esc(c.filename) + '"' + (sel.has(c.filename) ? ' checked' : '') + ' class="w-4 h-4 mt-0.5 accent-fb-primary shrink-0">' +
                     '<span class="min-w-0"><span class="block text-sm text-fb-text truncate">' + esc(c.title) +
-                    (c.is_representative ? ' <span class="text-fb-primary">●</span>' : '') + '</span>' +
                     (meta ? '<span class="block text-xs text-fb-textDim truncate">' + esc(meta) + '</span>' : '') +
                     '<span class="block text-xs text-fb-textDim/70 truncate fb-selectable">' + esc(c.filename) + '</span></span></label>';
             }).join('');
             const n = sel.size;
             overlay.innerHTML =
                 '<div class="bg-fb-sidebar border border-fb-border/60 rounded-2xl w-full max-w-md shadow-2xl max-h-[85vh] flex flex-col">' +
-                '<div class="p-5 pb-3"><h3 class="text-base font-semibold text-fb-text">Remove versions of “' + esc(song.title || '') + '”</h3>' +
-                '<p class="text-xs text-fb-textDim mt-1">This song has ' + charts.length + ' charts. Tick the ones to remove — files are deleted from disk and this cannot be undone.</p></div>' +
                 '<div class="px-3 overflow-y-auto v3-scroll flex-1 min-h-[6rem]">' + rows + '</div>' +
                 '<div class="p-5 pt-3 flex items-center justify-between gap-3">' +
                 '<button data-rm-cancel class="text-sm px-4 py-2 bg-fb-card/60 hover:bg-fb-card border border-fb-border/50 rounded-xl text-fb-text">Cancel</button>' +
@@ -1401,7 +1013,6 @@
         render();
     }
 
-    // ── Get info (R2) ──────────────────────────────────────────────────────--
     // File location + pack contents + the match verdict, from
     // GET /api/chart/{fn}/fileinfo. Paths and identity values are rendered
     // with .fb-selectable so they stay copyable under the v3 no-select default.
@@ -1430,7 +1041,6 @@
         const m = info.manifest || {};
         const ident = m.identity || {};
         const identLine = Object.keys(ident).map((k) =>
-            k + ': ' + (Array.isArray(ident[k]) ? ident[k].join(', ') : ident[k])).join(' · ');
         const match = info.match || {};
         const matchLine = match.match_state === 'manual' ? 'Pinned by you'
             : match.match_state === 'matched' ? ('Matched (' + (match.match_source || 'auto') +
@@ -1443,13 +1053,11 @@
             (m.stems || []).length ? ('stems: ' + m.stems.join(', ')) : '',
             m.has_cover ? 'cover art' : 'no cover art',
             m.has_lyrics ? 'lyrics' : '',
-        ].filter(Boolean).join(' · ');
 
         overlay.innerHTML =
             '<div class="bg-fb-sidebar border border-fb-border/60 rounded-2xl w-full max-w-lg shadow-2xl max-h-[85vh] flex flex-col">' +
             '<div class="p-5 pb-3 flex items-center justify-between gap-3">' +
             '<h3 class="text-base font-semibold text-fb-text truncate">' + esc(song.title || info.filename) + '</h3>' +
-            '<button data-gi-x aria-label="Close" class="text-fb-textDim hover:text-fb-text text-xl leading-none shrink-0">✕</button></div>' +
             '<div class="px-5 pb-5 overflow-y-auto v3-scroll space-y-1">' +
             row('Location', info.path, true) +
             row('Folder', info.folder, true) +
@@ -1464,23 +1072,18 @@
             ) : '') +
             '<div class="pt-2 mt-2 border-t border-fb-border/50"></div>' +
             row('Match', matchLine) +
-            (match.canon_artist ? row('Canonical', [match.canon_artist, match.canon_title, match.canon_album, match.canon_year].filter(Boolean).join(' — '), true) : '') +
             '</div></div>';
         document.body.appendChild(overlay);
         overlay.querySelector('[data-gi-x]')?.addEventListener('click', done);
     }
 
-    // ── Charts drawer (P5d, design §7.1 UX-2/3) ────────────────────────────────
     // The single deep-management surface for a work's charts. A body-appended
     // slide-in panel (the filter-drawer idiom; body-appended like the playlist
     // picker so it opens from any view) listing every chart of the work as a
-    // radiogroup — the checked row is the keeper the grid card plays. Clicking
     // an unchecked row (or Enter/Space on it) = Set as preferred, one tap;
     // "Reset to auto pick" appears when the keeper is your explicit pick.
     // Writes go through the work-charts API and the drawer re-renders from the
-    // response (there's no server-side library event bus — the drawer is its
     // own refresh); the grid re-fetches because the representative may have
-    // flipped. Global mode only — the slot-scoped (curated-album) mode is P6;
     // the per-row Split escape hatch is P5e.
     let _chartsPrevFocus = null;   // focus to restore when the drawer closes
 
@@ -1503,7 +1106,6 @@
             dr.setAttribute('aria-label', 'Charts of this song');
             // a11y: Escape closes; Tab is trapped inside the open drawer
             // (aria-modal alone doesn't trap for keyboard users); ArrowUp/Down
-            // move focus between the chart rows (focus only — selection stays
             // on Enter/Space, since a native-radio "arrow = select" would fire
             // a preferred write on every keystroke).
             dr.addEventListener('keydown', (e) => {
@@ -1535,7 +1137,6 @@
     function _chartRowHtml(c, data) {
         const checked = c.is_representative;
         const prefLabel = checked
-            ? (data.preferred_source === 'user' ? 'Preferred — your pick' : 'Preferred (auto)')
             : '';
         const tuningLabel = (typeof window.displayTuningName === 'function')
             ? window.displayTuningName(c.tuning_name || c.tuning)
@@ -1543,7 +1144,6 @@
         const meta = [fmtLabel(c), tuningLabel,
             (c.arrangements || []).map((a) => a.name).join('/'),
             c.year ? String(c.year) : '']
-            .filter(Boolean).join(' · ');
         const acc = (typeof c.best_accuracy === 'number')
             ? '<span class="font-bold ' + (c.best_accuracy >= MASTERY_ACCURACY ? 'text-fb-good' : c.best_accuracy >= 0.5 ? 'text-fb-mid' : 'text-fb-low') + '">' + Math.floor(c.best_accuracy * 100) + '%</span>'
             : '<span class="text-fb-textDim/60">not played</span>';
@@ -1553,26 +1153,18 @@
             '<div class="flex items-start justify-between gap-2">' +
               '<div class="min-w-0">' +
                 '<div class="text-sm text-fb-text truncate" title="' + esc(c.title) + '">' + esc(c.title) + '</div>' +
-                '<div class="text-xs text-fb-textDim truncate">' + esc(meta) + ' · ' + acc + '</div>' +
                 '<div class="text-[0.625rem] text-fb-textDim/60 truncate" title="' + esc(c.filename) + '">' + esc(c.filename) + '</div>' +
                 (prefLabel ? '<div class="text-[0.625rem] font-semibold text-fb-primary mt-0.5">' + esc(prefLabel) + '</div>' : '') +
               '</div>' +
-              '<button data-ch-play title="Play this chart" aria-label="Play this chart" class="shrink-0 w-8 h-8 rounded-full bg-fb-primary hover:bg-fb-primaryHi text-white text-sm leading-none">▶</button>' +
             '</div>' +
             '<div class="flex gap-2 mt-2">' +
-              '<button data-ch-pl class="text-xs px-2 py-1 rounded border border-fb-border/50 text-fb-textDim hover:text-fb-text">＋ Playlist</button>' +
-              // Split escape hatch (P5e, §7.1): "these aren't the same song".
-              // Only offered while the work still has 2+ charts — splitting the
               // last member is meaningless. Undo lives in the split-out card's
-              // ⋮ menu ("Rejoin other versions").
               (data.count >= 2
-                ? '<button data-ch-split title="These aren\'t the same song — give this chart its own card" class="text-xs px-2 py-1 rounded border border-fb-border/50 text-fb-textDim hover:text-fb-accent hover:border-fb-accent/50">Split out</button>'
                 : '') +
             '</div>' +
             '</div>';
     }
 
-    // A preferred/auto flip can change which chart the grid's card stands for —
     // re-fetch the grid in place (scroll preserved; renderWindow refills from
     // the current scrollTop). The tree lists every chart flat, so it's
     // unaffected; rare curate action, so a full re-fetch is fine.
@@ -1584,20 +1176,15 @@
         const els = _chartsDrawerEls();
         const dr = els.dr;
         const head = data.charts.find((c) => c.is_representative) || data.charts[0];
-        // Mastery-anchor heads-up (§7.1): shown once, ambiently, right after a
-        // switch — the headline may drop because history stays with each chart
         // (motor mastery is arrangement-specific). Text only, no toast/sound.
         const switchNote = (opts && opts.switched)
-            ? '<div class="text-[0.6875rem] text-fb-primary/90 border border-fb-primary/30 rounded-md px-2 py-1.5">Practice history stays with each chart — your new pick starts from its own stats.</div>'
             : '';
         dr.innerHTML =
             '<div class="p-5 space-y-4">' +
               '<div class="flex items-start justify-between gap-2">' +
                 '<div class="min-w-0">' +
                   '<h3 class="text-lg font-semibold text-fb-text truncate" title="' + esc(head.title) + '">' + esc(head.title) + '</h3>' +
-                  '<div class="text-xs text-fb-textDim truncate">' + esc(head.artist) + ' · ' + data.count + ' chart' + (data.count === 1 ? '' : 's') + '</div>' +
                 '</div>' +
-                '<button data-charts-close aria-label="Close" class="text-fb-textDim hover:text-fb-text text-xl leading-none">✕</button>' +
               '</div>' +
               switchNote +
               '<div role="radiogroup" aria-label="Charts of this song" class="space-y-2">' +
@@ -1605,7 +1192,6 @@
               '</div>' +
               (data.preferred_source === 'user'
                 ? '<button data-charts-auto class="w-full text-sm text-fb-textDim hover:text-fb-text border border-fb-border/50 rounded-md py-2">Reset to auto pick</button>'
-                : '<div class="text-[0.6875rem] text-fb-textDim">Auto pick sticks with a chart you\'ve practised; otherwise most complete → newest. Tap a chart to pin your keeper.</div>') +
             '</div>';
 
         dr.querySelector('[data-charts-close]').addEventListener('click', closeChartsDrawer);
@@ -1645,8 +1231,6 @@
                 const ok = await jsend('POST', '/api/chart/' + enc(fn) + '/split');
                 if (!ok) return;
                 _groupChanged();
-                // Re-read the ORIGINAL work — the split chart is gone from it
-                // (now its own card in the grid; its ⋮ menu offers the rejoin).
                 const fresh = await jget('/api/work/' + enc(data.work_key) + '/charts');
                 if (fresh && Array.isArray(fresh.charts) && fresh.charts.length) _renderChartsDrawer(fresh);
                 else closeChartsDrawer();
@@ -1675,7 +1259,6 @@
         _chartsPrevFocus = null;
     }
 
-    // Global opener — the ⚑ chip routes through this, and other views/plugins
     // (P2's details drawer, dashboards) can open the drawer without reaching
     // into this module.
     window.__fbOpenChartsDrawer = openChartsDrawer;
@@ -1686,14 +1269,11 @@
             el.dataset.wired = '1';
             const fn = el.getAttribute('data-fn');
             const song = state.songsById[fn] || { filename: fn };
-            // §7.1: when a chart-intrinsic filter attached a display_chart,
-            // the card SHOWS that member — so play actions target it too
             // (its arrangement indices match the rendered chips). Identity
             // actions (heart/save/playlist/menu registry) stay on the rep row.
             const playTarget = song.display_chart ? Object.assign({}, song, song.display_chart) : song;
             el.querySelectorAll('[data-v3-play]').forEach((pe) => pe.addEventListener('click', (e) => {
                 if (state.selectMode) { e.preventDefault(); toggleSelect(fn, el); return; }
-                playCard(playTarget);   // local → play; unsynced remote → sync then play
             }));
             el.querySelector('[data-menu]')?.addEventListener('click', (e) => { e.stopPropagation(); openCardMenu(el, song, e.currentTarget); });
             // Native right-click opens the same overflow menu at the pointer.
@@ -1703,21 +1283,17 @@
                 const idx = ab.getAttribute('data-arr');
                 playCard(playTarget, idx === '' ? undefined : Number(idx));
             }));
-            // ⚑ charts chip → the Charts drawer (P5d). Never a card play — the
             // chip row sits outside [data-v3-play]; stopPropagation is
             // belt-and-braces.
             el.querySelector('[data-charts]')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 openChartsDrawer(e.currentTarget.getAttribute('data-charts'), song);
             });
-            // "No match" badge → straight into the Fix-metadata popup for this
-            // song (the batch → fix handoff). stopPropagation so it doesn't also
             // trigger the card's play. Follows the displayed chart, like the menu.
             el.querySelector('[data-meta-fix]')?.addEventListener('click', (e) => {
                 e.stopPropagation();
                 if (window.__fbFixMatch) window.__fbFixMatch(playTarget);
             });
-            // Artist line → the artist page (PR-B). In select mode the grid's
             // capture-phase toggle intercepts first, so selection still wins.
             el.querySelector('[data-v3-artist]')?.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -1729,7 +1305,6 @@
                 try {
                     const r = await fetch('/api/favorites/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: fn }) });
                     const d = await r.json();
-                    btn.textContent = d.favorite ? '♥' : '♡';
                     btn.setAttribute('aria-pressed', d.favorite ? 'true' : 'false');
                     // Swap exactly the idle colour this button was rendered with
                     // (grid = text-white, tree/List view = text-fb-textDim). The old
@@ -1746,7 +1321,6 @@
                 e.stopPropagation();
                 if (window.v3Saved) { const saved = await window.v3Saved.toggle(fn); e.currentTarget.classList.toggle('text-fb-primary', !!saved); }
             });
-            // Inline/overlay plugin card actions → run via the shared registry.
             el.querySelectorAll('[data-act-card]').forEach((ab) => ab.addEventListener('click', async (e) => {
                 e.stopPropagation();
                 const reg = sm && sm.libraryCardActions;
@@ -1755,7 +1329,6 @@
         });
     }
 
-    // ── Multi-select + batch actions ──────────────────────────────────────--
     function toggleSelect(fn, el) {
         if (state.selected.has(fn)) state.selected.delete(fn); else state.selected.add(fn);
         const on = state.selected.has(fn);
@@ -1769,7 +1342,6 @@
     // inside a [data-fn] row toggles the card and STOPS the event, so nothing (a
     // per-card handler, a stray/legacy listener, an arrangement chip) can start
     // playback. Attached ONCE to each persistent host (grid / tree / artist page)
-    // — their innerHTML is replaced on re-render but the host element survives,
     // so a single bind never double-fires. Group headers / non-song chrome sit
     // outside any [data-fn], so closest() is null and their native clicks pass
     // through untouched.
@@ -1863,8 +1435,6 @@
             document.addEventListener('keydown', onKey);
             overlay.addEventListener('click', (e) => { if (e.target === overlay) done(null); });
 
-            const boxFor = (r) => r.touched ? (r.checked ? '☑' : '☐')
-                : (r.initial === 'all' ? '☑' : r.initial === 'some' ? '▣' : '☐');
             function rowHtml(r) {
                 return '<button type="button" data-pl="' + esc(String(r.id)) + '" class="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-white/5 text-left">' +
                     '<span class="text-lg leading-none w-5 text-fb-primary">' + boxFor(r) + '</span>' +
@@ -1910,7 +1480,6 @@
                 }
                 if (window.v3Playlists) { try { window.v3Playlists.refresh(); } catch (e) { /* */ } }
                 if (acts.length && window.fbNotify) {
-                    try { window.fbNotify.show({ title: 'Playlists updated', message: 'Updated ' + acts.length + ' playlist' + (acts.length === 1 ? '' : 's'), icon: '🎵' }); } catch (e) { /* */ }
                 }
                 done(acts.length ? true : null);
             }
@@ -1918,7 +1487,6 @@
                 overlay.innerHTML =
                     '<div class="bg-fb-card rounded-xl border border-fb-border/50 w-full max-w-md p-5 space-y-4" role="dialog" aria-label="Add to playlist">' +
                     '<div class="flex items-center justify-between"><h3 class="text-lg font-semibold text-fb-text">Add ' + fns.length + ' song' + (fns.length === 1 ? '' : 's') + ' to playlist</h3>' +
-                    '<button type="button" data-x class="text-fb-textDim hover:text-fb-text text-xl leading-none">✕</button></div>' +
                     '<div class="flex gap-2"><input data-new type="text" placeholder="+ New playlist name" class="' + btnCtrl + ' flex-1"><button type="button" data-create class="bg-fb-card/60 hover:bg-fb-card border border-fb-border/50 text-fb-text px-3 rounded-md text-sm">Create</button></div>' +
                     (rows.length > 8 ? '<input data-search type="text" placeholder="Search playlists..." class="' + btnCtrl + ' w-full" value="' + esc(query) + '">' : '') +
                     '<div data-list class="max-h-72 overflow-y-auto v3-scroll -mx-1 px-1">' + listHtml() + '</div>' +
@@ -1950,7 +1518,6 @@
     async function batchAddToPlaylist() {
         const pid = await addFilenamesToPlaylist(state.selected);
         // Only tear down the multi-select when the add actually happened. A
-        // cancelled or failed picker returns null — preserve the selection (and
         // skip the reload) so the user can retry, matching the pre-refactor
         // behaviour where !ans / !pid returned early before finishBatch().
         if (pid) finishBatch();
@@ -1962,7 +1529,6 @@
         reload(); renderBatchBar();
     }
 
-    // Bulk personal-meta editor (P2) — apply-to-all over the current selection via
     // the batch endpoint (one request). Additive + mixed-state safe: difficulty
     // defaults to "Leave" (each song keeps its own value); tags ADD/REMOVE rather
     // than replace, so a bulk action never silently wipes per-song data. Notes are
@@ -1970,7 +1536,6 @@
     function openBulkEdit() {
         const fns = [...state.selected];
         if (!fns.length) return;
-        // Tags present across the selection (from the embedded row payload) → one-tap
         // removable chips, no extra fetch.
         const present = new Set();
         fns.forEach((fn) => ((state.songsById[fn] && state.songsById[fn].tags) || []).forEach((t) => present.add(t)));
@@ -1990,7 +1555,6 @@
                 '<button data-bd="' + val + '" class="px-2 h-8 rounded-md text-sm border ' +
                 (String(bulk.diff) === String(val) ? 'bg-fb-primary text-white border-fb-primary' : 'bg-gray-800/50 text-fb-textDim border-gray-700 hover:text-fb-text') + '">' + label + '</button>';
             const addChips = bulk.add.map((t) => '<span class="inline-flex items-center gap-1 bg-fb-primary/20 text-fb-text border border-fb-primary/40 text-xs px-2 py-0.5 rounded-full">' + esc(t) +
-                '<button data-badd-rm="' + esc(t) + '" aria-label="Remove ' + esc(t) + '" class="text-fb-textDim hover:text-fb-accent leading-none">×</button></span>').join('');
             const rmChips = [...present].sort((a, b) => a.localeCompare(b)).map((t) =>
                 '<button data-brm="' + esc(t) + '" class="text-xs px-2 py-0.5 rounded-full border ' +
                 (bulk.remove.has(t) ? 'bg-fb-low/30 text-fb-low border-fb-low/40 line-through' : 'bg-gray-800/50 text-fb-textDim border-gray-700 hover:text-fb-text') + '">' + esc(t) + '</button>').join('');
@@ -1999,7 +1563,6 @@
                 '<div class="bg-fb-sidebar border border-fb-border/60 rounded-2xl w-full max-w-sm shadow-2xl max-h-[85vh] overflow-y-auto v3-scroll">' +
                 '<div class="p-5 space-y-4">' +
                 '<div class="flex items-center justify-between"><h3 class="text-base font-semibold text-fb-text">Edit ' + fns.length + ' songs</h3>' +
-                '<button data-bulk-x aria-label="Close" class="text-fb-textDim hover:text-fb-text text-xl leading-none">✕</button></div>' +
 
                 '<div><div class="text-xs text-fb-textDim mb-1">Difficulty (for you)</div>' +
                 '<div class="flex flex-wrap gap-1 items-center">' + diffBtn('keep', 'Leave') + diffBtn(1, '1') + diffBtn(2, '2') + diffBtn(3, '3') + diffBtn(4, '4') + diffBtn(5, '5') + diffBtn('clear', 'Clear') + '</div>' +
@@ -2007,7 +1570,6 @@
 
                 '<div><div class="text-xs text-fb-textDim mb-1">Add tags to all</div>' +
                 '<div class="flex flex-wrap gap-1 mb-2">' + (addChips || '<span class="text-xs text-fb-textDim">None</span>') + '</div>' +
-                '<div class="flex gap-1"><input type="text" data-badd-input placeholder="Add a tag…" class="flex-1 bg-fb-card border border-fb-border/60 rounded-lg px-3 py-1.5 text-sm text-fb-text outline-none focus:border-fb-primary/60">' +
                 '<button data-badd-btn class="text-sm px-3 rounded-lg bg-fb-card/60 border border-fb-border/50 text-fb-text hover:bg-fb-card">Add</button></div></div>' +
 
                 (present.size ? '<div><div class="text-xs text-fb-textDim mb-1">Remove tags (present in the selection)</div><div class="flex flex-wrap gap-1">' + rmChips + '</div></div>' : '') +
@@ -2035,11 +1597,9 @@
             if (bulk.add.length) body.add_tags = bulk.add;
             if (bulk.remove.size) body.remove_tags = [...bulk.remove];
             if (!('set_difficulty' in body) && !body.add_tags && !body.remove_tags) { done(); return; }
-            // jsend returns null on HTTP error / network failure — don't tear down the
             // selection or reload as if it worked. Surface the failure and let the user retry.
             const res = await jsend('POST', '/api/songs/user-meta/batch', body);
             if (!res) {
-                if (window.fbNotify) { try { window.fbNotify.show({ title: 'Bulk edit failed', message: 'Could not save your changes. Please try again.', icon: '⚠️', accent: '#EF4444' }); } catch (e) { /* */ } }
                 return;
             }
             done();
@@ -2054,19 +1614,15 @@
         try { const r = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }); return r.ok ? r.json() : null; } catch (e) { return null; }
     }
 
-    // ── Grid (windowed / recycled — #636 item 3 stage 2) ───────────────────--
-    // Only the visible cards (± OVERSCAN_ROWS) live in the DOM; a sizer element
     // sized to the FULL library gives the scrollbar its geometry. state.songs is
     // a sparse array indexed by absolute position; ensureWindow() fetches the
     // pages a window needs (keyset forward fast-path, else OFFSET random-access),
     // and renderWindow() paints the slice the current scrollTop maps to.
 
-    // Live count of cards actually in the DOM — bounded under windowing, so it's
     // the bounded-DOM invariant the tests assert (NOT a "loaded so far" signal).
     function loadedCount() { return document.querySelectorAll('#v3-songs-grid [data-fn]').length; }
 
     // The scroll listener lives on the SHARED #v3-main container, so guard every
-    // render entry point on the Songs screen actually being active — otherwise
     // scrolling another screen would keep rendering into the hidden grid after
     // Songs has been visited once.
     function songsActive() { const el = document.getElementById('v3-songs'); return !!el && el.classList.contains('active'); }
@@ -2110,19 +1666,15 @@
 
     // A placeholder card with the SAME vertical structure (and therefore height)
     // as a real card, shown only if a window's fetch hasn't landed yet. No
-    // [data-fn] → wireCards / repaintAccuracy skip it.
     function _skeletonCard() {
         return '<div class="v3-card-skel" aria-hidden="true">' +
             '<div class="relative aspect-square rounded-lg overflow-hidden bg-fb-card animate-pulse"></div>' +
-            '<div class="mt-1 text-sm text-transparent truncate">·</div>' +
-            '<div class="text-xs text-transparent truncate">·</div>' +
             '<div class="v3-card-chips flex gap-1 mt-1"></div>' +
             '</div>';
     }
 
     // Signature of the card at absolute index i: real-card vs skeleton, plus the
     // select-mode it was built under. A change here is the ONLY reason a recycled
-    // node must be rebuilt (a hole filled after a fetch, or select mode toggled) —
     // otherwise the node is reused as-is across window slides.
     function _cardSig(i) {
         return (state.songs[i] ? 'r' : 's') + (state.selectMode ? '1' : '0');
@@ -2141,14 +1693,12 @@
     // Reconcile the grid's children to exactly cover [start, end) in ascending
     // index order, REUSING the card nodes that stay in-window. Sliding the window
     // one row now mutates only the row that entered/left instead of tearing down +
-    // rebuilding (+ re-wiring) the whole ~60-card window every frame — that
     // per-slide teardown was the main-thread stall behind the "library skips every
     // so many scrolls, up or down" report (the stall buffers held-arrow key-repeats
     // that then flush in a burst). wireCards()'s data-wired guard wires only the
     // freshly-built nodes.
     function _syncWindow(grid, start, end) {
         // Pass 1: drop nodes that left the window, are untagged, or whose content
-        // signature is stale (skeleton→real, or select-mode toggled). What remains
         // is a reusable, correctly-rendered subset in ascending DOM order.
         for (const el of Array.from(grid.children)) {
             const a = el.getAttribute('data-idx');
@@ -2192,7 +1742,6 @@
             const prevCursor = state.keysetOk ? state.pageCursors[p - 1] : null;
             if (prevCursor) extra.after = prevCursor; else extra.page = p;
             const data = await jget('/api/library?' + queryParams(extra).toString());
-            if (state.epoch !== epoch || !data) return;   // reset mid-fetch → discard stale
             state.total = data.total || 0;
             if (typeof data.next_cursor !== 'undefined') {
                 state.pageCursors[p] = data.next_cursor;
@@ -2209,8 +1758,6 @@
         return prom;
     }
 
-    // Ensure every absolute index in [start, end) is loaded (fetch — or await an
-    // in-flight fetch of — the covering pages). Pages resolve in order so the
     // keyset fast-path can chain off the previous page's cursor.
     async function ensureWindow(start, end) {
         if (end <= start) return;
@@ -2222,7 +1769,6 @@
     }
 
     // Empty-library dead-end card (launch polish): only for a genuinely empty
-    // LOCAL library — a search / filter / format narrowing that merely matched
     // nothing keeps the plain blank grid (saying "empty" there would lie), and
     // remote providers own their own emptiness. The inline grid-column style
     // spans the card across the grid without a new Tailwind class.
@@ -2242,7 +1788,6 @@
     }
 
     // Paint the slice of cards the current scrollTop maps to. Sizes the sizer to
-    // the full library, computes the visible row range (± overscan), fetches any
     // missing pages, then swaps the grid's innerHTML to just that slice. A token
     // guards against an out-of-order fetch repainting a window the user scrolled
     // past.
@@ -2259,7 +1804,6 @@
             grid.innerHTML = _emptyLibraryHtml(); grid.style.top = '0px';
             state.winRange = { start: 0, end: 0 };
             if (grid.innerHTML) {
-                // The grid is absolutely positioned inside the sizer — give the
                 // sizer the card's height so it participates in layout.
                 sizer.style.height = grid.offsetHeight + 'px';
                 grid.querySelector('[data-lib-empty-settings]')?.addEventListener('click', () => {
@@ -2277,7 +1821,6 @@
         const end = Math.min(total, (lastRow + 1) * cols);
         // Re-render when the range changed, a card is missing, OR select mode
         // toggled since the window was last painted (so checkboxes/rings on cached
-        // cards track state — e.g. after leaving Songs in select mode and back).
         const same = state.winRange && state.winRange.start === start && state.winRange.end === end
             && state.renderedSelectMode === state.selectMode;
         if (same && !_windowHasHoles(start, end)) return;
@@ -2300,11 +1843,9 @@
 
     // Reset/initial load of the grid. Clears the sparse store, fetches page 0
     // (which establishes state.total + whether the keyset fast-path is available),
-    // then renders the window twice — the first render lays a real card so the
     // second can measure the true row height and settle the window size.
     async function loadGrid(reset) {
         // A reset requested mid-fetch (provider/sort/filter/search change) must
-        // not be dropped — remember it and re-run once the in-flight load returns.
         if (state.loading) { if (reset) state.pendingReset = true; return; }
         const grid = _gridEl();
         if (!grid) return;
@@ -2339,7 +1880,6 @@
     }
 
     // A scroll on #v3-main re-renders the window (rAF-coalesced). No more
-    // near-bottom paging trigger — the visible range alone decides what's shown.
     function bindScroll() {
         const main = document.getElementById('v3-main');
         if (!main || state.scrollBound) return;
@@ -2367,10 +1907,8 @@
         }).observe(main);
     }
 
-    // ── A–Z jump rail interaction ─────────────────────────────────────────────
     // With the windowed grid the rail seeks DIRECTLY: sort_letters gives the
     // per-bucket song counts, so the first card of a letter is at the cumulative
-    // count of the buckets before it — convert that index to a scrollTop and let
     // the scroll handler render+fetch the destination window (O(1), no page-
     // through). The rail only offers letters the server reports present for the
     // active sort+filter, so a tap always lands on a real card. (A legacy provider
@@ -2386,7 +1924,6 @@
         if (!railVisible()) { rail.classList.add('hidden'); railBubbleEl()?.classList.add('hidden'); return; }
         const col = railSortColumn();
         // A newer refresh (sort/filter/search/provider change) supersedes this
-        // one — a slow stats response must not repaint a rail the grid moved on.
         const myToken = ++_railToken;
         // Present letters for the active sort+filter (filter-synced; counts
         // songs). `sort_letters=1` opts into the active-sort breakdown so the
@@ -2403,12 +1940,9 @@
         // Prefer the active-sort breakdown. `letters` is the artist distinct-
         // count, so it only matches the cards on an artist sort; a legacy/third-
         // party provider that predates `sort_letters` returns none, in which
-        // case a title sort would advertise wrong letters — hide the rail then.
         let letters = stats && stats.sort_letters;
-        // sort_letters counts SONGS per bucket of the active sort column — exactly
         // the cumulative the windowed jump needs to seek to a row index. The
         // `letters` fallback is a distinct-ARTIST count (legacy provider without
-        // sort_letters, artist sort only), which can't drive a precise seek — flag
         // it so jumpToLetter does a bounded scan instead of trusting the math.
         const songCounts = !!(stats && stats.sort_letters);
         if (!letters) {
@@ -2417,7 +1951,6 @@
         }
         state.railLetters = letters;
         state.railLettersAreSongCounts = songCounts;
-        // No present letters (empty or fully-filtered grid) → nothing to jump
         // to; hide the rail instead of rendering a column of disabled buttons.
         if (!Object.keys(letters).length) { rail.classList.add('hidden'); railBubbleEl()?.classList.add('hidden'); return; }
         const desc = state.sort.endsWith('-desc');
@@ -2450,7 +1983,6 @@
     function _hideBubble() { railBubbleEl()?.classList.add('hidden'); }
 
     // The absolute index of the first card in a bucket, from the sort_letters
-    // song-counts: sum the counts of every bucket ordered before it. O(1) — no
     // page-through. Returns null when we don't have true song-counts (the legacy
     // distinct-artist fallback), so the caller can scan instead.
     function _letterStartIndex(letter) {
@@ -2549,7 +2081,6 @@
             // text-selection / focus-scroll default; we re-focus below for kbd.
             e.preventDefault();
             try { btn.focus({ preventScroll: true }); } catch (_) { /* */ }
-            seekToY(e.clientY, true);   // jump on press → a tap lands immediately
         });
         rail.addEventListener('pointermove', (e) => {
             if (!dragging) return;
@@ -2611,14 +2142,11 @@
         }
     }
 
-    // ── Tree ────────────────────────────────────────────────────────────────
-    // ── Albums (album-condensed browse; consumes /api/library/albums) ─────────
     // Album cards -> click -> a track list (reusing /api/library?artist=&album=)
     // with Play-album (feeds the play-queue). Respects the active drawer filters.
     async function loadAlbums() {
         const host = document.getElementById('v3-songs-albums');
         if (!host) return;
-        host.innerHTML = '<p class="text-fb-textDim text-sm">Loading…</p>';
         const data = await jget('/api/library/albums?' + queryParams().toString());
         const albums = (data && data.albums) || [];
         if (!albums.length) { host.innerHTML = '<p class="text-fb-textDim text-sm py-8 text-center">No albums match.</p>'; return; }
@@ -2630,7 +2158,6 @@
                 (a.cover ? '<img src="' + esc(artUrl({ filename: a.cover })) + '" alt="" loading="lazy" decoding="async" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" onerror="this.style.visibility=\'hidden\'">' : '') +
                 '</div>' +
                 '<div class="text-sm text-fb-text truncate">' + esc(a.album) + '</div>' +
-                '<div class="text-xs text-fb-textDim truncate">' + esc(a.artist) + ' · ' + (a.count || 0) + ' track' + (a.count === 1 ? '' : 's') + '</div>' +
                 '</button>').join('') + '</div>';
         host.querySelectorAll('[data-album]').forEach((b) => b.addEventListener('click', () => {
             const a = albums[Number(b.getAttribute('data-album'))];
@@ -2638,21 +2165,16 @@
         }));
     }
     // `opts` (PR-B): the artist page reuses this album detail inside its own
-    // host with its own back label/target — { host, backLabel, onBack,
     // ignoreFilters }. Call sites without opts are byte-for-byte the original
     // albums-view flow.
     async function openAlbum(a, opts) {
         const host = (opts && opts.host) || document.getElementById('v3-songs-albums');
         if (!host) return;
-        const backLabel = (opts && opts.backLabel) || '← Albums';
         const onBack = (opts && opts.onBack) || (() => loadAlbums());
-        host.innerHTML = '<p class="text-fb-textDim text-sm">Loading…</p>';
         // Normally honour the active drawer filters (like the album grid) but pin
-        // THIS album's artist/album and force track order — so the track list and
         // Play-album never include songs the user filtered out. When opened FROM
         // an artist page (ignoreFilters), drop the global filters entirely: the
         // artist page is the artist's whole shelf, so its album view must show
-        // every track to match the page's counts — scoped only to artist+album.
         const p = (opts && opts.ignoreFilters)
             ? new URLSearchParams({ provider: state.provider, artist: a.artist, album: a.album, size: '300', sort: 'track' })
             : queryParams({ artist: a.artist, album: a.album, size: '300', sort: 'track' }, { catalog: true });
@@ -2662,8 +2184,6 @@
             '<button data-albums-back class="text-sm text-fb-textDim hover:text-fb-text mb-4">' + esc(backLabel) + '</button>' +
             '<div class="flex items-center justify-between gap-3 mb-4">' +
             '<div class="min-w-0"><h2 class="text-2xl font-bold text-fb-text truncate">' + esc(a.album) + '</h2>' +
-            '<p class="text-sm text-fb-textDim truncate">' + esc(a.artist) + ' · ' + songs.length + ' track' + (songs.length === 1 ? '' : 's') + '</p></div>' +
-            (songs.length ? '<button data-album-playall class="bg-fb-primary hover:bg-fb-primaryHi text-white text-sm font-medium px-4 py-2 rounded-md shrink-0">▶ Play album</button>' : '') +
             '</div>' +
             '<ul class="space-y-1">' + songs.map((s, i) =>
                 '<li><button data-album-track="' + i + '" class="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-white/5 text-left">' +
@@ -2682,8 +2202,6 @@
         }));
     }
 
-    // One list-row of a song — shared by the tree view and the artist page's
-    // song list, so wireCards() gives both the same play/chips/fav/save/⋮
     // behaviour from one markup source.
     function treeSongRowHtml(s) {
         const k = cardKey(s); const fl = fmtLabel(s); const chips = arrChipsHtml(s); const sel = state.selected.has(k);
@@ -2699,20 +2217,14 @@
         '<span class="flex-1 min-w-0 cursor-pointer" data-v3-play><span class="block text-sm text-fb-text truncate">' + esc(s.title) + '</span></span>' +
         (chips ? '<span class="hidden sm:flex items-center gap-1 shrink-0">' + chips + '</span>' : '') +
         (fl ? '<span class="text-[0.5625rem] font-bold px-1 py-0.5 rounded shrink-0 ' + (fl === 'FEEDPAK' ? 'bg-fb-primary/20 text-fb-primary' : 'bg-fb-card text-fb-textDim') + '">' + fl + '</span>' : '') +
-        accuracyBadge(k, 'tree', s) +
         // Same fav / save-for-later / overflow-menu cluster as the grid
         // card. Always shown (like the arrangement chips), not hover-
         // revealed. wireCards() binds all three for any [data-fn].
         '<div class="flex items-center gap-0.5 shrink-0">' +
-        '<button data-fav data-fav-idle="text-fb-textDim" title="Favorite" aria-label="Favorite" aria-pressed="' + (s.favorite ? 'true' : 'false') + '" class="px-1 ' + (s.favorite ? 'text-fb-accent' : 'text-fb-textDim') + '">' + (s.favorite ? '♥' : '♡') + '</button>' +
-        '<button data-save title="Save for later" aria-label="Save for later" class="px-1 text-fb-textDim hover:text-fb-text">🔖</button>' +
-        '<button data-menu title="More" aria-label="More actions" class="px-1 text-fb-textDim hover:text-fb-text leading-none">⋮</button>' +
         '</div>' +
         '</div>');
     }
 
-    // ── Artist page (PR-B, artist-pages launch charrette) ──────────────────────
-    // An in-place sub-render like openAlbum(): the artist "in your library" — a
     // shelf plus your relationship to it, never a discography browser (locked
     // position 1). Renders 100% from the local /page payload; the external
     // links row is the one decorated extra, gated on the opt-in Settings toggle
@@ -2721,115 +2233,19 @@
 
     function _artistHostEl() { return document.getElementById('v3-songs-artistpage'); }
 
-    // ── Instrument-aware tuning (the bass-player tuning-filter report) ────────
-    // A song's bass chart is often in a different tuning from its guitar chart,
-    // so the tuning facet/filter/sort and the card chip must speak for the
-    // instrument the player actually plays. The host's working-tuning
-    // capability already holds the live selection (seeded from /api/settings on
-    // boot, updated when the player switches) — read it rather than adding
-    // another settings fetch. `state.settingsInstrument` is the fallback for
-    // hosts where the capability isn't mounted.
-    // Three perspectives, matching `active_instrument_profile`: lead and rhythm
-    // guitar charts can be tuned differently too, so a rhythm player hits the
-    // same bug a bassist did. The PROFILE is the only three-valued source (the
-    // working-tuning capability knows guitar-vs-bass but not lead-vs-rhythm),
-    // so it wins; the capability is the live fallback for hosts where the
-    // profile hasn't loaded.
-    const PERSPECTIVES = ['guitar-lead', 'guitar-rhythm', 'bass'];
-    function libInstrument() {
-        if (PERSPECTIVES.indexOf(state.settingsProfile) >= 0) return state.settingsProfile;
-        try {
-            const wt = window.feedBack && window.feedBack.workingTuning;
-            if (wt && typeof wt.get === 'function') {
-                const cur = wt.get();
-                if (cur && cur.instrument === 'bass') return 'bass';
-            }
-        } catch (_) { /* capability absent/erroring — fall through to settings */ }
-        return state.settingsInstrument === 'bass' ? 'bass' : 'guitar-lead';
-    }
-
-    // "Playable without retuning" mode reads the player's CURRENT tuning from
-    // the working-tuning capability (the live session state the tuner writes),
-    // not a separate setting. No capability => we cannot know the current
-    // tuning, so the mode is unavailable rather than guessed.
-    function currentWorkingTuning() {
-        try {
-            const wt = window.feedBack && window.feedBack.workingTuning;
-            if (!wt || typeof wt.get !== 'function') return null;
-            const cur = wt.get();
-            if (!cur || !Array.isArray(cur.offsets) || !cur.offsets.length) return null;
-            return cur;
-        } catch (_) { return null; }
-    }
-
-    function playableAvailable() { return !!currentWorkingTuning(); }
-
-    function applyPlayableParams(p, f) {
-        if (f.tuningMatch !== 'playable') return;
-        const cur = currentWorkingTuning();
-        if (!cur) return;
-        p.set('tuning_match', 'playable');
-        p.set('playable_offsets', cur.offsets.join(','));
-        p.set('playable_instrument', cur.instrument === 'bass' ? 'bass' : 'guitar');
-        p.set('playable_string_count', String(cur.stringCount || cur.offsets.length));
-    }
-
-    // Short human label for the perspective, for the facet/sort headers.
-    function libInstrumentLabel() {
-        const p = libInstrument();
-        return p === 'bass' ? 'bass' : p === 'guitar-rhythm' ? 'rhythm' : 'lead';
-    }
-
-    // The column a row's tuning lives in for the active perspective.
-    function perspectiveTuningField() {
-        const p = libInstrument();
-        return p === 'bass' ? 'bass_tuning_name'
-            : p === 'guitar-rhythm' ? 'rhythm_tuning_name' : '';
-    }
-
-    // The tuning a card should SHOW: bass players see the bass chart's tuning,
-    // falling back to the song (guitar-derived) tuning when the song has no
-    // bass arrangement — the common case, so the fallback is not an edge path.
-    function shownTuningName(song) {
-        const f = perspectiveTuningField();
-        if (f && song[f]) return song[f];
-        return song.tuning_name || song.tuning;
-    }
-
-    function shownTuningOffsets(song) {
-        const f = perspectiveTuningField();
-        if (f) {
-            const offKey = f.replace('_name', '_offsets');
-            if (song[offKey]) return song[offKey];
-            return song.tuning_offsets;
-        }
-        return song.tuning_offsets;
-    }
-
-    // Sync the two Settings gates into module state (fire-and-forget — the
     // cached flags gate entry-point rendering; openArtistPage re-checks).
     function refreshArtistPageGates() {
         return jget('/api/settings').then((cfg) => {
             if (!cfg) return;
             state.artistPagesEnabled = cfg.artist_pages_enabled !== false;
             state.artistLinksEnabled = cfg.artist_external_links === true;
-            // Fallback instrument for hosts without the working-tuning capability.
-            state.settingsInstrument = cfg.instrument === 'bass' ? 'bass' : 'guitar';
-            // The three-valued perspective source (lead / rhythm / bass).
-            state.settingsProfile = cfg.active_instrument_profile || '';
-            if (cfg && typeof cfg.auto_filter_instrument === 'boolean') {
-                _autoFilterEnabled = cfg.auto_filter_instrument;
-            }
         });
     }
 
-    // 2×2 mosaic of the artist's OWN album art — the playlist-cover grammar
     // (#626 playlistCoverHtml) adapted to the page payload's art_urls. Never a
-    // broken-image tile: no art → a quiet glyph.
     function artistMosaicHtml(arts) {
         const box = 'w-32 h-32 sm:w-40 sm:h-40 shrink-0 rounded-xl overflow-hidden bg-fb-card';
         const img = (u) => '<img src="' + esc(u) + '" alt="" loading="lazy" decoding="async" class="w-full h-full object-cover" onerror="this.style.visibility=\'hidden\'">';
-        if (!arts || !arts.length) return '<div class="' + box + ' flex items-center justify-center text-5xl text-fb-textDim">🎤</div>';
         if (arts.length < 4) return '<div class="' + box + '">' + img(arts[0]) + '</div>';
         return '<div class="' + box + ' grid grid-cols-2 grid-rows-2 gap-px">' + arts.slice(0, 4).map(img).join('') + '</div>';
     }
@@ -2859,7 +2275,6 @@
         }
     }
 
-    // The one exported opener — every entry point (card ⋮ / right-click "Go to
     // artist", the grid card's artist line, the Details drawer link, a
     // similar-artist chip) funnels through here.
     async function openArtistPage(artistName) {
@@ -2867,13 +2282,11 @@
         if (!host || !artistName) return;
         if (state.provider !== 'local' || state.artistPagesEnabled === false) return;
         const main = _getV3MainScroller();
-        // Remember where browsing left off ONCE — chip-hopping between artist
         // pages keeps the original return point.
         if (!state.artistPage) state.artistReturnScroll = main ? main.scrollTop : 0;
         state.artistPage = artistName;
         _setBrowseHostsHidden(true);
         host.classList.remove('hidden');
-        host.innerHTML = '<p class="text-fb-textDim text-sm">Loading…</p>';
         _applyMainScrollTop(0);
         const page = await jget('/api/artist/' + enc(artistName) + '/page');
         if (state.artistPage !== artistName) return;             // superseded
@@ -2894,7 +2307,6 @@
     }
 
     // reload() (any toolbar-driven change) leaves the sub-page without the
-    // scroll restore — the new state describes a fresh browse from the top.
     function _dropArtistPageSilently() {
         if (!state.artistPage) return;
         state.artistPage = null;
@@ -2909,7 +2321,6 @@
         const me = state.artistPage;
         const name = page.artist || me || '';
         // Songs list: page through /api/library with the artist filter (locked
-        // position 6 — query_page, keyset-safe; never the DISTINCT+OFFSET
         // query_artists path). Unfiltered on purpose: the page is the artist's
         // whole shelf, not the grid's current filter view.
         const songs = [];
@@ -2931,15 +2342,10 @@
 
         const aliasLine = (page.variants || []).length
             ? '<div class="text-xs text-fb-textDim mt-1">also shown as: ' +
-              page.variants.map((v) => esc(v.name) + ' ×' + v.count).join(' · ') + '</div>'
             : '';
-        // Provenance pill — only when the artist is actually matched (drawer/
-        // Get-info grammar: say where the tidy names come from, ≤2 taps away).
         const pill = page.mb_artist_id
-            ? '<div class="mt-2"><span class="inline-flex items-center text-[0.625rem] px-2 py-0.5 rounded-full bg-fb-primary/15 text-fb-primary border border-fb-primary/40" title="This artist is matched to MusicBrainz — the match lives in your local cache; your files are never modified">Matched · MusicBrainz</span></div>'
             : '';
         // Stats strip. DENOMINATOR LAW: every number is songs in YOUR library;
-        // the mastered segment is omitted entirely until one exists —
         // invitational, never "0 mastered" (launch blind-spot #3).
         const bits = [
             page.song_count + ' song' + (page.song_count === 1 ? '' : 's'),
@@ -2956,7 +2362,6 @@
                   (al.cover ? '<img src="' + esc(artUrl({ filename: al.cover })) + '" alt="" loading="lazy" decoding="async" class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105" onerror="this.style.visibility=\'hidden\'">' : '') +
                   '</div>' +
                   '<div class="text-sm text-fb-text truncate">' + esc(al.name) + '</div>' +
-                  '<div class="text-xs text-fb-textDim truncate">' + (al.year ? esc(al.year) + ' · ' : '') + (al.count || 0) + ' track' + (al.count === 1 ? '' : 's') + '</div>' +
                   '</button>').join('') +
               '</div></section>'
             : '';
@@ -2967,7 +2372,6 @@
             : '<p class="text-sm text-fb-textDim mt-6">No songs by this artist are in your library.</p>';
 
         // Similar in your library (locked position 3): genre co-occurrence over
-        // artists you already OWN — never an acquisition funnel. Empty → the
         // whole module hides (never "Similar: none").
         const similarHtml = (page.similar || []).length
             ? '<section class="mt-6"><h3 class="text-sm font-semibold text-fb-text mb-2">Similar in your library</h3>' +
@@ -2978,29 +2382,22 @@
             : '';
 
         host.innerHTML =
-            '<button data-ap-back class="text-sm text-fb-textDim hover:text-fb-text mb-4">← Song Library</button>' +
             '<div class="flex items-start gap-4">' +
             artistMosaicHtml(page.art_urls) +
             '<div class="min-w-0 flex-1">' +
             '<h2 class="text-2xl font-bold text-fb-text truncate" title="' + esc(name) + '">' + esc(name) + '</h2>' +
             aliasLine + pill +
-            '<p class="text-sm text-fb-textDim mt-2">' + bits.join(' · ') + '</p>' +
             '<div class="flex flex-wrap gap-2 mt-3">' +
             (songs.length
-                ? '<button data-ap-playall class="bg-fb-primary hover:bg-fb-primaryHi text-white text-sm font-medium px-4 py-2 rounded-md">▶ Play all</button>' +
-                  '<button data-ap-shuffle class="bg-fb-card/60 hover:bg-fb-card border border-fb-border/50 text-fb-text text-sm px-4 py-2 rounded-md">⇄ Shuffle</button>'
                 : '') +
-            '<button data-ap-smart class="bg-fb-card/60 hover:bg-fb-card border border-fb-border/50 text-fb-text text-sm px-4 py-2 rounded-md" title="A live playlist of everything by this artist — new songs join it automatically">Save as smart playlist</button>' +
             '</div>' +
             '</div></div>' +
             albumsHtml +
             songsHtml +
             similarHtml +
-            // External links land here (lazy fetch) — hidden until they exist.
             '<div data-ap-links></div>';
 
         host.querySelector('[data-ap-back]')?.addEventListener('click', closeArtistPage);
-        // Play all / Shuffle → the shared playQueue (same path as Play-album).
         const startQueue = (shuffle) => {
             let files = songs.map((s) => s.filename).filter(Boolean);
             if (!files.length) return;
@@ -3018,16 +2415,13 @@
         host.querySelector('[data-ap-playall]')?.addEventListener('click', () => startQueue(false));
         host.querySelector('[data-ap-shuffle]')?.addEventListener('click', () => startQueue(true));
         // Save as smart playlist (locked position 12): a rules-based
-        // collection over the existing machinery — a LIVING query that
         // regenerates, never a completable checklist.
         host.querySelector('[data-ap-smart]')?.addEventListener('click', async (e) => {
             const btn = e.currentTarget;
             const res = await jsend('POST', '/api/collections', { name: name, rules: { artist: name } });
             if (res && res.ok) {
-                btn.textContent = '✓ Saved';
                 btn.disabled = true;
                 if (window.fbNotify) {
-                    try { window.fbNotify.show({ title: 'Smart playlist saved', message: '“' + name + '” is now a source in the library picker', icon: '🎵' }); } catch (_) { /* */ }
                 }
             }
         });
@@ -3036,10 +2430,7 @@
             const al = (page.albums || [])[Number(b.getAttribute('data-ap-album'))];
             if (!al) return;
             openAlbum({ artist: name, album: al.name },
-                { host: host, backLabel: '← ' + name, onBack: () => openArtistPage(name), ignoreFilters: true });
         }));
-        // Similar chips → that artist's page (the return point stays the
-        // original browse position — see openArtistPage).
         host.querySelectorAll('[data-ap-similar]').forEach((b) => b.addEventListener('click', () => {
             openArtistPage(b.getAttribute('data-ap-similar'));
         }));
@@ -3050,14 +2441,12 @@
 
     // External links row (locked position 4): whitelisted MB url-rels, opt-in
     // via Settings, always the external browser, domain visible. Renders ONLY
-    // when the toggle is on AND the fetch yields links — otherwise the section
     // simply never appears (empty modules hide).
     async function _fillArtistLinks(host, name, page) {
         if (!state.artistLinksEnabled || !page.mb_artist_id) return;
         const slot = host.querySelector('[data-ap-links]');
         if (!slot) return;
         const data = await jget('/api/artist/' + enc(name) + '/links');
-        // slot.isConnected covers every superseded case — navigating away, a
         // reload, or hopping to another artist all replace this DOM.
         if (!data || !slot.isConnected) return;
         const links = data.links || {};
@@ -3071,15 +2460,12 @@
         if (!items.length) return;
         slot.innerHTML =
             '<div class="mt-6 pt-4 border-t border-fb-border/40">' +
-            '<div class="text-xs text-fb-textDim mb-2">On the web · opens your browser</div>' +
             '<div class="flex flex-wrap gap-2">' +
             items.map((it) =>
                 '<a href="' + esc(it.url) + '" target="_blank" rel="noopener noreferrer" class="text-xs px-3 py-1.5 rounded-full bg-fb-card/60 border border-fb-border/50 text-fb-text hover:border-fb-primary/60 transition">' +
-                esc(it.label) + ' ↗ <span class="text-fb-textDim">' + esc(_linkDomain(it.url)) + '</span></a>').join('') +
             '</div></div>';
     }
 
-    // Global opener — the drawer link, plugins, and other views reach the page
     // without touching this module's internals.
     window.__fbOpenArtistPage = openArtistPage;
 
@@ -3087,16 +2473,11 @@
         const host = document.getElementById('v3-songs-tree');
         if (!host) return;
         // The list view always groups artist -> album (query_artists has no
-        // free sort) — when the picked sort is something else, say so instead
         // of silently ignoring it ("why does the sort do nothing here?").
         const _treeSortNote = railSortColumn() === 'artist' ? ''
-            : '<p class="text-xs text-fb-textDim mb-3">List view groups by artist — the selected sort applies to the card grid.</p>';
-        // Capture expanded groups BEFORE the "Loading…" wipe below, so a reload
         // (e.g. toggling select mode) restores them instead of collapsing all.
         const openArtists = new Set(
             [...host.querySelectorAll('details[open]')].map((d) => d.getAttribute('data-artist')));
-        host.innerHTML = '<p class="text-fb-textDim text-sm">Loading…</p>';
-        // Page through ALL artists — the endpoint clamps size to 100, so a
         // single request would silently truncate libraries with >100 artists.
         const artists = [];
         let page = 0, total = Infinity;
@@ -3119,7 +2500,6 @@
         wireCards(host);
     }
 
-    // ── Filter drawer ─────────────────────────────────────────────────────--
     function triState(list_has, list_lacks, value) {
         if (list_has.includes(value)) return 'has';
         if (list_lacks.includes(value)) return 'lacks';
@@ -3131,19 +2511,10 @@
         rm(hasArr); rm(lacksArr);
         if (s === 'any') hasArr.push(value);
         else if (s === 'has') lacksArr.push(value);
-        // 'lacks' → cycles back to any (already removed)
     }
-    function triPill(group, value, label, st, title) {
         const cls = st === 'has' ? 'bg-fb-good/30 text-fb-good border-fb-good/40'
             : st === 'lacks' ? 'bg-fb-low/30 text-fb-low border-fb-low/40'
                 : 'bg-gray-800/50 text-fb-textDim border-gray-700';
-        const mark = st === 'has' ? '✓ ' : st === 'lacks' ? '✕ ' : '';
-        const tip = title ? ' title="' + esc(title) + '"' : '';
-        return '<button data-tri="' + group + '" data-val="' + esc(value) + '" class="px-2 py-1 rounded-md text-xs border ' + cls + '"' + tip + '>' + mark + esc(label) + '</button>';
-    }
-    function renderDrawerIfOpen() {
-        const d = document.getElementById('v3-songs-drawer');
-        if (d && !d.classList.contains('hidden') && d.innerHTML.trim()) renderDrawer();
     }
     function renderDrawer() {
         const d = document.getElementById('v3-songs-drawer');
@@ -3152,53 +2523,11 @@
         d.innerHTML =
             '<div class="p-5 space-y-5">' +
             '<div class="flex items-center justify-between"><h3 class="text-lg font-semibold text-fb-text">Filters</h3>' +
-            '<button data-drawer-close class="text-fb-textDim hover:text-fb-text">✕</button></div>' +
-            section('Arrangements', _arrangementOptions().map((a) => triPill('arr', a, a, triState(f.arr_has, f.arr_lacks, a))).join('')) +
-            section('Stems (feedpak)', STEMS.map((s) => triPill('stem', s, s, triState(f.stem_has, f.stem_lacks, s))).join('') +
-                (() => {
-                    // One-click "which songs still need splitting": lacks EVERY
-                    // instrument stem — the same query Stem Splitter's own
-                    // missing-stems view runs. Toggles off if already active.
-                    const on = STEMS.every((s) => f.stem_lacks.includes(s)) && !f.stem_has.length;
-                    return '<button data-stem-unsplit class="px-2 py-1 rounded-md text-xs border '
-                        + (on ? 'bg-fb-primary text-white border-fb-primary' : 'bg-gray-800/50 text-fb-textDim border-gray-700')
-                        + '" title="Songs with no instrument stems — not yet split">'
-                        + (on ? '✕ ' : '') + 'Not split</button>';
-                })()) +
             section('Lyrics', ['', '1', '0'].map((v) => '<button data-lyrics="' + v + '" class="px-2 py-1 rounded-md text-xs border ' + (f.lyrics === v ? 'bg-fb-primary text-white border-fb-primary' : 'bg-gray-800/50 text-fb-textDim border-gray-700') + '">' + (v === '' ? 'Any' : v === '1' ? 'Has lyrics' : 'No lyrics') + '</button>').join('')) +
-            // Progress (mastery bands) — multi-select; server filters via song_stats.
             section('Progress', [['mastered', 'Mastered'], ['in_progress', 'In progress'], ['not_started', 'Not started']].map((it) => '<button data-mastery="' + it[0] + '" class="px-2 py-1 rounded-md text-xs border ' + (f.mastery.includes(it[0]) ? 'bg-fb-primary text-white border-fb-primary' : 'bg-gray-800/50 text-fb-textDim border-gray-700') + '">' + it[1] + '</button>').join('')) +
-            // Match (P8) — the song's metadata-match lifecycle state, a triage
             // facet for the enrichment layer. Session-only, like Progress.
             section('Match', [['review', 'To review'], ['matched', 'Matched'], ['unmatched', 'Unmatched'], ['pending', 'Not scanned']].map((it) => '<button data-match="' + it[0] + '" class="px-2 py-1 rounded-md text-xs border ' + (f.match.includes(it[0]) ? 'bg-fb-primary text-white border-fb-primary' : 'bg-gray-800/50 text-fb-textDim border-gray-700') + '">' + it[1] + '</button>').join('')) +
-            // Genre facet — dynamic list from /api/library/genres (primary genre).
             (state.genres && state.genres.length ? section('Genre', state.genres.map((g) => '<button data-genre="' + esc(g) + '" class="px-2 py-1 rounded-md text-xs border ' + (f.genre.includes(g) ? 'bg-fb-primary text-white border-fb-primary' : 'bg-gray-800/50 text-fb-textDim border-gray-700') + '">' + esc(g) + '</button>').join('')) : '') +
-            // The facet header NAMES the perspective. Silent instrument-following
-            // is the original bug in a new place: the user must be able to tell
-            // which instrument these tunings describe.
-            section('Tuning (' + libInstrumentLabel() + ')',
-                // MODE toggle. Exact match answers "which tuning is this
-                // labelled"; Playable answers "will this cost me a retune" —
-                // which is what a player actually wants. Both are offered;
-                // exact stays the default so nothing changes unasked.
-                '<div class="flex gap-1 mb-2">'
-                + [['exact', 'Exact tuning'], ['playable', 'Playable without retuning']].map((m) => {
-                    const on = (f.tuningMatch || 'exact') === m[0];
-                    const dis = m[0] === 'playable' && !playableAvailable();
-                    return '<button data-tuning-match="' + m[0] + '"'
-                        + (dis ? ' disabled' : '')
-                        + (dis ? ' title="Needs your current tuning — open the tuner first"' : '')
-                        + ' class="px-2 py-1 rounded-md text-xs border '
-                        + (on ? 'bg-fb-primary text-white border-fb-primary'
-                            : 'bg-gray-800/50 text-fb-textDim border-gray-700')
-                        + (dis ? ' opacity-40 cursor-not-allowed' : '') + '">'
-                        + esc(m[1]) + '</button>';
-                }).join('')
-                + '</div>'
-                + (f.tuningMatch === 'playable'
-                    ? '<div class="text-xs text-fb-textDim mb-2">Charts you can play in your current tuning, no retune. Songs whose lowest string sits below yours are excluded.</div>'
-                    : '')
-                + ((state.tuningNames || []).map((t) => {
                 // Filter on the server's grouping key (raw offsets for customs)
                 // so two "Custom Tuning" entries are distinct; show their target
                 // notes in the label so they're distinguishable.
@@ -3209,37 +2538,19 @@
                     && typeof window.displayTuningTargets === 'function') {
                     const offs = window.parseRawTuningOffsets(t.offsets);
                     const notes = offs ? window.displayTuningTargets(offs, { tuningName: t.name }) : '';
-                    if (notes) label = 'Custom · ' + notes;
                 }
-                // Be honest about the fallback: when some of a row's songs have
-                // no bass chart and are borrowing the guitar tuning, say so
-                // rather than presenting a borrowed tuning as a measured one.
-                const inf = t.inferred_count || 0;
-                const title = inf
-                    ? inf + ' of ' + t.count + ' inferred from the guitar chart (no bass arrangement)'
-                    : '';
-                const countLabel = inf ? t.count + ', ' + inf + ' inferred' : String(t.count);
-                return triPill('tuning', val, label + ' (' + countLabel + ')',
-                    f.tunings.includes(val) ? 'has' : 'any', title);
-            }).join('') || '<span class="text-xs text-fb-textDim">No tunings</span>')) +
-            // Multi-chart grouping toggle (P5e) — a VIEW mode, not a filter
             // (never counted in the badge, never saved into collection rules).
             // Local provider only: it's the one that implements group=.
             (state.provider === 'local'
                 ? section('Grouping', '<button data-grouping class="px-2 py-1 rounded-md text-xs border ' +
                     (state.grouping !== false ? 'bg-fb-primary text-white border-fb-primary' : 'bg-gray-800/50 text-fb-textDim border-gray-700') +
-                    '" title="Collapse charts of the same song to one card (the ⚑ chip lists the versions)">' +
-                    (state.grouping !== false ? '✓ ' : '') + 'One card per song</button>')
                 : '') +
             // Collections always replay against the LOCAL library, so only offer
             // "save" when browsing local with a non-empty filter set.
             (state.provider === 'local' && Object.keys(currentFilterRules()).length
-                ? '<div class="pt-3 border-t border-fb-border/50"><button data-drawer-save class="w-full text-sm text-fb-primary hover:text-fb-primaryHi border border-fb-primary/40 rounded-md py-2">＋ Save as collection</button></div>'
                 : '') +
-            // Artist canonicalization (P4) — local library only (aliases apply to
             // the local catalog). Opens the Tidy-up modal to merge "ACDC"/"AC/DC".
             (state.provider === 'local'
-                ? '<div class="pt-3 border-t border-fb-border/50"><button data-drawer-tidy class="w-full text-sm text-fb-textDim hover:text-fb-text border border-fb-border/50 rounded-md py-2">Tidy up artists…</button></div>'
                 : '') +
             '<div class="flex justify-between pt-3 border-t border-fb-border/50"><button data-drawer-clear class="text-sm text-fb-textDim hover:text-fb-text">Clear all</button>' +
             '<button data-drawer-apply class="bg-fb-primary hover:bg-fb-primaryHi text-white px-4 py-2 rounded-md text-sm">Done</button></div></div>';
@@ -3251,18 +2562,6 @@
             else if (g === 'tuning') { const i = f.tunings.indexOf(v); if (i >= 0) f.tunings.splice(i, 1); else f.tunings.push(v); }
             renderDrawer();
         }));
-        d.querySelectorAll('[data-tuning-match]').forEach((b) => b.addEventListener('click', () => {
-            if (b.disabled) return;
-            f.tuningMatch = b.getAttribute('data-tuning-match');
-            renderDrawer();
-        }));
-        d.querySelector('[data-stem-unsplit]')?.addEventListener('click', () => {
-            const on = STEMS.every((s) => f.stem_lacks.includes(s)) && !f.stem_has.length;
-            f.stem_has.length = 0;
-            f.stem_lacks.length = 0;
-            if (!on) f.stem_lacks.push(...STEMS);
-            renderDrawer();
-        });
         d.querySelectorAll('[data-lyrics]').forEach((b) => b.addEventListener('click', () => { f.lyrics = b.getAttribute('data-lyrics'); renderDrawer(); }));
         d.querySelectorAll('[data-mastery]').forEach((b) => b.addEventListener('click', () => { const v = b.getAttribute('data-mastery'); const i = f.mastery.indexOf(v); if (i >= 0) f.mastery.splice(i, 1); else f.mastery.push(v); renderDrawer(); }));
         d.querySelector('[data-grouping]')?.addEventListener('click', () => {
@@ -3276,7 +2575,6 @@
         d.querySelector('[data-drawer-tidy]')?.addEventListener('click', openArtistTidyUp);
         d.querySelector('[data-drawer-close]')?.addEventListener('click', closeDrawer);
         d.querySelector('[data-drawer-clear]')?.addEventListener('click', async () => {
-            state.filters = { arr_has: [], arr_lacks: [], stem_has: [], stem_lacks: [], lyrics: '', tunings: [], mastery: [], match: [], genre: [], tuningMatch: 'exact' };
             state.artist = '';
             state.album = '';
             renderDrawer();
@@ -3298,10 +2596,8 @@
     function closeDrawer() { document.getElementById('v3-songs-drawer')?.classList.add('translate-x-full'); document.getElementById('v3-songs-overlay')?.classList.add('hidden'); updateFilterBadge(); }
     function updateFilterBadge() { const b = document.getElementById('v3-songs-filter-count'); if (b) { const n = activeFilterCount(); b.textContent = n; b.classList.toggle('hidden', n === 0); } }
 
-    // ── Song Details drawer (P2) ───────────────────────────────────────────--
     // Evolves the legacy edit-metadata modal into a v3 slide-in drawer that
     // unifies catalog identity (writes back into the feedpak FILE), the personal
-    // practice layer (difficulty / tags / notes — local, never shared), the like
     // heart, and remove-from-library. Reuses the filter-drawer slide idiom
     // (fixed-right panel + overlay + translate-x-full) but is built on demand and
     // body-appended, so it opens from any card context. The Charts drawer (P5d)
@@ -3328,14 +2624,11 @@
         // Notes aren't in the grid row payload; difficulty/tags are, but re-read
         // for authority (another tab / a bulk edit may have changed them).
         let meta = { user_difficulty: (song.user_difficulty != null ? song.user_difficulty : null), notes: '', tags: song.tags || [] };
-        try { const r = await fetch('/api/song/' + enc(fn) + '/user-meta'); if (r.ok) meta = await r.json(); } catch (_) { /* offline → row data */ }
         let vocab = [];
         try { const r = await fetch('/api/tags'); if (r.ok) vocab = (await r.json()).tags || []; } catch (_) { /* */ }
         // Match provenance (launch polish): the drawer names what this chart
         // matched, so a silently-wrong first match is visible where the
-        // metadata lives. 404 (no row yet) / offline → no line.
         let enrich = null;
-        try { const r = await fetch('/api/enrichment/song/' + enc(fn)); if (r.ok) enrich = await r.json(); } catch (_) { /* offline → no provenance line */ }
         if (_detailsEls) closeDetails();   // a concurrent open resolved first
 
         const st = {
@@ -3371,24 +2664,16 @@
         if (first) { try { first.focus({ preventScroll: true }); const n = first.value.length; first.setSelectionRange(n, n); } catch (_) { /* */ } }
     }
 
-    // Gap-fill (R4a) block inside the drawer's Identity section: preview →
-    // per-key confirm → written. Adds ABSENT keys only; the server re-checks
     // under its io lock, so this UI can never replace an author-set value.
     const GAP_KEY_LABELS = { album: 'Album', year: 'Year', genres: 'Genres', mbid: 'MusicBrainz ID', isrc: 'ISRC' };
     function gapFillHtml(st) {
         const g = st.gap;
-        if (!g) return '<button data-gapfill-check class="text-xs text-fb-textDim hover:text-fb-text">Write missing info to file…</button>';
-        if (g.loading) return '<div class="text-xs text-fb-textDim">Checking the file…</div>';
         if (g.written) {
             const names = Object.keys(g.written).map((k) => GAP_KEY_LABELS[k] || k).join(', ');
-            return '<div class="text-xs text-fb-text">✓ Added to file: ' + esc(names) + '</div>';
         }
         if (!g.eligible) {
             const why = {
                 'not-sloppak': 'Only feedpak songs can be written to.',
-                'no-match': 'No confirmed match yet — nothing verified to write.',
-                'review': 'This song’s match is waiting for review — confirm it first.',
-                'nothing-missing': 'Nothing missing — the file already has all of this.',
             }[g.reason] || 'Could not check the file. Try again.';
             return '<div class="text-xs text-fb-textDim">' + esc(why) + '</div>';
         }
@@ -3401,20 +2686,16 @@
         }).join('');
         return '<div class="space-y-2">' +
             '<div class="text-xs font-semibold uppercase tracking-wider text-fb-textDim">Write to file</div>' + rows +
-            '<div class="text-[0.6875rem] text-fb-textDim">Only adds what’s missing — nothing already in the file is changed. A backup (.bak) is kept beside the file.</div>' +
             '<div class="flex gap-2"><button data-gapfill-write class="bg-fb-primary hover:bg-fb-primaryHi text-white px-3 py-1.5 rounded-lg text-xs font-semibold">Write to file</button>' +
             '<button data-gapfill-cancel class="px-3 py-1.5 bg-fb-card/60 hover:bg-fb-card border border-fb-border/50 rounded-lg text-xs text-fb-text">Cancel</button></div></div>';
     }
 
     // Match-provenance line under the Identity fields (launch polish): names
-    // the canonical identity this chart matched — the invisible-first-wrong-
-    // match fix — with the same Fix-match escape hatch the card menu offers.
     // Only for settled matches; pending/review/failed rows stay silent here
     // (the review chip / match facet own those states).
     function provenanceHtml(st) {
         const e = st.enrich;
         if (!e || (e.match_state !== 'matched' && e.match_state !== 'manual')) return '';
-        const who = [e.canon_artist, e.canon_title].filter(Boolean).join(' — ');
         if (!who) return '';
         const src = e.match_state === 'manual' ? 'your pick' : 'MusicBrainz';
         return '<div class="flex items-baseline gap-2 text-xs text-fb-textDim">' +
@@ -3430,7 +2711,6 @@
         const applied = new Set(st.tags);
         const tagChips = st.tags.length
             ? st.tags.map((t) => '<span class="inline-flex items-center gap-1 bg-fb-primary/20 text-fb-text border border-fb-primary/40 text-xs px-2 py-0.5 rounded-full">' + esc(t) +
-                '<button data-tag-rm="' + esc(t) + '" aria-label="Remove tag ' + esc(t) + '" class="text-fb-textDim hover:text-fb-accent leading-none">×</button></span>').join('')
             : '<span class="text-xs text-fb-textDim">No tags yet</span>';
         const suggest = (vocab || []).filter((v) => !applied.has(v.tag)).slice(0, 8).map((v) =>
             '<button data-tag-add="' + esc(v.tag) + '" class="text-[0.6875rem] px-2 py-0.5 rounded-full bg-gray-800/60 text-fb-textDim hover:bg-fb-primary hover:text-white transition">' + esc(v.tag) + '</button>').join('');
@@ -3439,7 +2719,6 @@
             '<input type="text" id="' + id + '" value="' + esc(val) + '" class="w-full bg-fb-card border border-fb-border/60 rounded-lg px-3 py-2 text-sm text-fb-text outline-none focus:border-fb-primary/60"></div>';
         return '<div class="p-5 space-y-5">' +
             '<div class="flex items-center justify-between"><h3 class="text-lg font-semibold text-fb-text">Song details</h3>' +
-            '<button data-det-close aria-label="Close" class="text-fb-textDim hover:text-fb-text text-xl leading-none">✕</button></div>' +
 
             '<div class="flex items-center gap-3">' +
             '<div class="relative group cursor-pointer shrink-0" data-det-art title="Change album art">' +
@@ -3447,35 +2726,27 @@
             '<div class="absolute inset-0 bg-black/50 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-[0.625rem] text-white">Change</div>' +
             '<input type="file" accept="image/*" id="det-art-file" class="hidden"></div>' +
             '<div class="min-w-0"><div class="text-sm text-fb-text truncate" title="' + esc(song.title || song.filename) + '">' + esc(song.title || song.filename) + '</div>' +
-            '<div class="mt-1"><button data-det-fav class="text-xs ' + (st.fav ? 'text-fb-accent' : 'text-fb-textDim hover:text-fb-text') + '">' + (st.fav ? '♥ Liked' : '♡ Like') + '</button>' +
             '<span class="text-[0.625rem] text-fb-textDim ml-1">a like, not a rating</span></div></div></div>' +
 
-            // Identity — writes back into the feedpak FILE
             '<div class="space-y-3"><div class="flex items-center gap-2"><div class="text-xs font-semibold uppercase tracking-wider text-fb-textDim">Identity</div>' +
             '<span class="text-[0.625rem] px-1.5 py-0.5 rounded-full bg-gray-800/70 text-fb-textDim border border-gray-700" title="These came from the song&#39;s feedpak. Editing them writes back to the file.">From pack</span></div>' +
             field('det-title', 'Title', st.t) + field('det-artist', 'Artist', st.a) +
-            // Artist page (PR-B, entry point 3) — a small jump-off next to the
             // Artist field; local library + pages-toggle gated like the others.
             ((state.provider === 'local' && (st.a || song.artist) && state.artistPagesEnabled !== false)
-                ? '<button data-det-artist-page class="text-xs text-fb-primary hover:text-fb-primaryHi text-left">View artist page →</button>'
                 : '') +
             field('det-album', 'Album', st.al) +
             '<div><label for="det-year" class="text-xs text-fb-textDim mb-1 block">Year</label><input type="text" inputmode="numeric" id="det-year" value="' + esc(st.y) + '" placeholder="e.g. 2024" class="w-full bg-fb-card border border-fb-border/60 rounded-lg px-3 py-2 text-sm text-fb-text outline-none focus:border-fb-primary/60"></div>' +
             provenanceHtml(st) +
             '<div data-det-gapfill>' + gapFillHtml(st) + '</div></div>' +
 
-            // Personal practice layer — local, never shared
-            '<div class="space-y-3 pt-1"><div class="text-xs font-semibold uppercase tracking-wider text-fb-textDim">Your practice <span class="normal-case font-normal text-fb-textDim/70">· stays on this device</span></div>' +
             '<div><div class="flex items-center justify-between mb-1"><label class="text-xs text-fb-textDim">Difficulty (for you)</label>' +
             '<button data-diff-clear class="text-[0.6875rem] text-fb-textDim hover:text-fb-text ' + (st.diff == null ? 'invisible' : '') + '">Clear</button></div>' +
             '<div class="flex gap-1 items-center">' + diffBtns + '<span class="text-xs text-fb-textDim ml-2">' + esc(st.diff ? DIFF_LABELS[st.diff] : 'Not set') + '</span></div></div>' +
             '<div><label for="det-tag-input" class="text-xs text-fb-textDim mb-1 block">Tags</label>' +
             '<div class="flex flex-wrap gap-1 mb-2" data-det-tags>' + tagChips + '</div>' +
-            '<div class="flex gap-1"><input type="text" id="det-tag-input" placeholder="Add a tag…" class="flex-1 bg-fb-card border border-fb-border/60 rounded-lg px-3 py-1.5 text-sm text-fb-text outline-none focus:border-fb-primary/60">' +
             '<button data-tag-addbtn class="text-sm px-3 rounded-lg bg-fb-card/60 border border-fb-border/50 text-fb-text hover:bg-fb-card">Add</button></div>' +
             (suggest ? '<div class="flex flex-wrap gap-1 mt-2">' + suggest + '</div>' : '') + '</div>' +
             '<div><label for="det-notes" class="text-xs text-fb-textDim mb-1 block">Notes</label>' +
-            '<textarea id="det-notes" rows="3" class="w-full bg-fb-card border border-fb-border/60 rounded-lg px-3 py-2 text-sm text-fb-text outline-none focus:border-fb-primary/60 resize-none" placeholder="Private practice notes…">' + esc(st.notes) + '</textarea></div></div>' +
 
             '<div class="flex gap-3 pt-1"><button data-det-save class="flex-1 bg-fb-primary hover:bg-fb-primaryHi text-white px-4 py-2 rounded-xl text-sm font-semibold">Save</button>' +
             '<button data-det-close class="px-4 py-2 bg-fb-card/60 hover:bg-fb-card border border-fb-border/50 rounded-xl text-sm text-fb-text">Cancel</button></div>' +
@@ -3508,7 +2779,6 @@
 
         const artWrap = $('[data-det-art]'); const artFile = $('#det-art-file');
         if (artWrap && artFile) {
-            // Art click opens the cover PICKER (PR-C) — the old direct file
             // dialog lives on inside it as the Upload tile. The picker applies
             // immediately (its own routes + refresh), so it bypasses the
             // drawer's Save; the file-input path below stays as the fallback
@@ -3532,7 +2802,6 @@
             try {
                 const r = await fetch('/api/favorites/toggle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ filename: song.filename }) });
                 const d = await r.json(); st.fav = !!d.favorite;
-                const btn = e.currentTarget; btn.textContent = st.fav ? '♥ Liked' : '♡ Like';
                 btn.classList.toggle('text-fb-accent', st.fav); btn.classList.toggle('text-fb-textDim', !st.fav);
                 _patchCardFav(song.filename, st.fav);
             } catch (_) { /* */ }
@@ -3540,14 +2809,12 @@
 
         $('[data-det-save]')?.addEventListener('click', () => saveDetails(song, st));
         $('[data-det-remove]')?.addEventListener('click', () => removeFromLibrary(song));
-        // Fix match → the exact flow the card ⋮ menu uses (match-review.js).
         // The drawer closes first: the match modal sits below the drawer's
         // z-index, and the fix supersedes the edit anyway.
         $('[data-det-fixmatch]')?.addEventListener('click', () => {
             closeDetails();
             if (window.__fbFixMatch) window.__fbFixMatch(song);
         });
-        // "View artist page →" — uses the field's CURRENT text (an in-progress
         // rename still lands on the right page once saved; unsaved text simply
         // canonicalizes server-side), falling back to the row's artist.
         $('[data-det-artist-page]')?.addEventListener('click', () => {
@@ -3583,7 +2850,6 @@
                 ok = r.ok; d = await r.json();
             } catch (_) { /* offline */ }
             if (!ok || !d || !d.written) {
-                if (window.fbNotify) { try { window.fbNotify.show({ title: 'Write failed', message: 'Could not write to the file. Please try again.', icon: '⚠️', accent: '#EF4444' }); } catch (e) { /* */ } }
                 st.gap = null; render(); return;
             }
             // Reflect what landed in the open drawer (and keep saveDetails'
@@ -3605,14 +2871,11 @@
     }
 
     // Keep a rendered card's heart in sync when the drawer toggles the like (the
-    // heart is instant, not part of Save — matches the on-card heart).
     function _patchCardFav(fn, fav) {
         const sel = (window.CSS && CSS.escape) ? CSS.escape(fn) : fn;
         document.querySelectorAll('[data-fn="' + sel + '"] [data-fav]').forEach((btn) => {
-            btn.textContent = fav ? '♥' : '♡';
             btn.setAttribute('aria-pressed', fav ? 'true' : 'false');
             // Swap exactly the idle colour this heart was rendered with (grid =
-            // text-white, tree/List view = text-fb-textDim) — mirrors wireCards.
             // A hardcoded text-white toggle would leave List-View rows' text-fb-textDim
             // in place, so the heart changed glyph but stayed dim (never turned red).
             const idle = btn.getAttribute('data-fav-idle') || 'text-white';
@@ -3628,13 +2891,11 @@
         if (catChanged) ops.push(fetch('/api/song/' + enc(fn) + '/meta', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: st.t.trim(), artist: st.a.trim(), album: st.al.trim(), year: String(st.y).trim() }) }));
         ops.push(fetch('/api/song/' + enc(fn) + '/user-meta', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_difficulty: st.diff, notes: st.notes, tags: st.tags }) }));
         if (st.artDataUrl) ops.push(fetch('/api/song/' + enc(fn) + '/art/upload', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: st.artDataUrl }) }));
-        // Fire the writes concurrently but know each outcome — a failed write must not
         // look like a save. allSettled keeps partial results; treat a rejection OR a
         // non-ok HTTP response as failure and keep the drawer open so the user can retry.
         const results = await Promise.allSettled(ops);
         const failed = results.some((r) => r.status === 'rejected' || (r.value && r.value.ok === false));
         if (failed) {
-            if (window.fbNotify) { try { window.fbNotify.show({ title: 'Save failed', message: 'Could not save your changes. Please try again.', icon: '⚠️', accent: '#EF4444' }); } catch (e) { /* */ } }
             return;
         }
         closeDetails();
@@ -3662,7 +2923,6 @@
     // (it falls back to the legacy modal where this isn't defined).
     window.__fbOpenSongDetails = openDetails;
 
-    // ── Artist Tidy-up (P4) ────────────────────────────────────────────────--
     // Merge messy artist variants ("ACDC" + "AC/DC") into one canonical name.
     // Aliases apply AT DISPLAY only (no file rewrite); the dropdown/tree/grid pick
     // up the change on the next load. Self-contained centered modal.
@@ -3699,7 +2959,6 @@
             const rows = list.map((a) => {
                 const checked = st.sel.has(a.name) ? ' checked' : '';
                 const mapped = (a.canonical && a.canonical.toLowerCase() !== (a.name || '').toLowerCase())
-                    ? '<span class="text-[0.6875rem] text-fb-primary ml-1">→ ' + esc(a.canonical) + '</span>' : '';
                 return '<label class="flex items-center gap-2 px-2 py-1 rounded hover:bg-fb-card/50 cursor-pointer">' +
                     '<input type="checkbox" data-tidy-sel="' + esc(a.name) + '"' + checked + ' class="w-4 h-4 accent-fb-primary shrink-0">' +
                     '<span class="text-sm text-fb-text truncate flex-1">' + esc(a.name) + mapped + '</span>' +
@@ -3709,21 +2968,17 @@
             const canReady = st.mergeInto.trim() && st.sel.size && !st.busy;
             const mergeBar = st.sel.size
                 ? '<div class="pt-2 mt-2 border-t border-fb-border/50 space-y-2">' +
-                  '<div class="text-xs text-fb-textDim">' + st.sel.size + ' selected — merge into:</div>' +
                   '<div class="flex gap-1"><input type="text" data-tidy-canon value="' + esc(st.mergeInto) + '" placeholder="Canonical name" class="flex-1 bg-fb-card border border-fb-border/60 rounded-lg px-3 py-1.5 text-sm text-fb-text outline-none focus:border-fb-primary/60">' +
                   '<button data-tidy-merge ' + (canReady ? '' : 'disabled') + ' class="text-sm px-3 rounded-lg ' + (canReady ? 'bg-fb-primary hover:bg-fb-primaryHi text-white' : 'bg-fb-card/50 text-fb-textDim cursor-not-allowed') + '">Merge</button></div></div>'
                 : '';
 
             const aliasRows = st.aliases.length
-                ? st.aliases.map((al) => '<div class="flex items-center gap-2 px-2 py-1 text-sm"><span class="text-fb-textDim truncate flex-1">' + esc(al.raw_name) + ' <span class="text-fb-textDim/60">→</span> ' + esc(al.canonical_name) + '</span>' +
                     '<button data-tidy-unmerge="' + esc(al.raw_name) + '" class="text-xs text-fb-textDim hover:text-fb-accent shrink-0">un-merge</button></div>').join('')
                 : '<div class="text-xs text-fb-textDim px-2 py-2">No merges yet</div>';
 
             overlay.innerHTML =
                 '<div class="bg-fb-sidebar border border-fb-border/60 rounded-2xl w-full max-w-md shadow-2xl max-h-[85vh] flex flex-col">' +
                 '<div class="p-5 pb-3 flex items-center justify-between"><h3 class="text-base font-semibold text-fb-text">Tidy up artists</h3>' +
-                '<button data-tidy-x aria-label="Close" class="text-fb-textDim hover:text-fb-text text-xl leading-none">✕</button></div>' +
-                '<div class="px-5"><input type="text" data-tidy-search value="' + esc(st.query) + '" placeholder="Search artists…" class="w-full bg-fb-card border border-fb-border/60 rounded-lg px-3 py-1.5 text-sm text-fb-text outline-none focus:border-fb-primary/60 mb-1"></div>' +
                 '<div class="px-3 overflow-y-auto v3-scroll flex-1 min-h-[6rem]">' + rows + '</div>' +
                 '<div class="px-5">' + mergeBar + '</div>' +
                 '<div class="px-5 pt-2"><div class="text-xs font-semibold uppercase tracking-wider text-fb-textDim mb-1">Current merges</div><div class="max-h-32 overflow-y-auto v3-scroll">' + aliasRows + '</div></div>' +
@@ -3792,7 +3047,6 @@
 
     function reload() {
         _clearLibraryScrollSnapshot();
-        // Any toolbar-driven change backs out of the artist sub-page — the new
         // state describes a fresh browse, and the host toggles below re-show
         // the picked view (mirrors how openAlbum's detail yields to a reload).
         _dropArtistPageSilently();
@@ -3804,7 +3058,6 @@
         updateFilterBadge();
         // A sort/filter/search/view change rebuilds the grid from page 0, so any
         // in-flight letter jump is now paging through a dataset that's about to
-        // be discarded — supersede it so it can't scroll the rebuilt grid.
         _jumpToken++;
         // Keep a handle on the load so callers (notably the scroll restore on
         // screen re-entry) can await page-0 actually landing before paging
@@ -3815,7 +3068,6 @@
         document.getElementById('v3-songs-tree')?.classList.toggle('hidden', state.view !== 'tree');
         document.getElementById('lib-folder-tree')?.classList.toggle('hidden', state.view !== 'folder');
         document.getElementById('v3-songs-albums')?.classList.toggle('hidden', state.view !== 'albums');
-        // Refresh the A–Z jump rail (shows only for the grid + alphabetical
         // sorts; hides itself otherwise). Independent of the grid load.
         refreshRail();
         // Refresh the practice-aware home (repertoire meter + keep-practicing
@@ -3831,12 +3083,10 @@
         return loaded;
     }
 
-    // ── Chrome ────────────────────────────────────────────────────────────--
     async function loadProviders() {
         try {
             const lp = sm && sm.libraryProviders;
             // refresh() re-fetches /api/library/providers so REMOTE providers
-            // (registered by feedBack-plugin-remote-library-*) appear — list()
             // returns only the capability's initial local-only snapshot.
             const fn = lp && (typeof lp.refresh === 'function' ? lp.refresh : (typeof lp.list === 'function' ? lp.list : null));
             if (fn) {
@@ -3858,20 +3108,16 @@
         // anchored to; dismiss any open menu first so it can't float orphaned.
         if (_closeCardMenu) _closeCardMenu();
         // Restore last-used sort/format/view/filters once, before building the
-        // toolbar so its selects reflect the saved choice (default: Artist A–Z).
         if (!_prefsRestored) { applySavedPrefs(); _prefsRestored = true; }
         const providers = await loadProviders();
         const [, tn] = await Promise.all([
             (async () => { state.accuracy = (await jget('/api/stats/best')) || {}; })(),
-            jget('/api/library/tuning-names?provider=' + enc(state.provider)
-                + '&instrument=' + enc(libInstrument())),
             loadArtistCatalog(),
             // Artist-page gates (PR-B) ride the initial fetch batch so the
             // first card paint already knows whether artist lines are links.
             refreshArtistPageGates(),
         ]);
         state.tuningNames = (tn && tn.tunings) || [];
-        _lastRenderInstrument = libInstrument();
         try { const _g = await jget('/api/library/genres?provider=' + enc(state.provider)); state.genres = (_g && _g.genres) || []; } catch (e) { state.genres = []; }
 
         const opt = (arr, sel) => arr.map(([v, l]) => '<option value="' + esc(v) + '"' + (v === sel ? ' selected' : '') + '>' + esc(l) + '</option>').join('');
@@ -3882,7 +3128,6 @@
             '<div class="max-w-7xl mx-auto px-6 md:px-8 pb-8">' +
             '<div id="v3-songs-toolbar" class="sticky z-20 -mx-6 md:-mx-8 px-6 md:px-8 py-3 mb-4 bg-fb-sidebar/95 backdrop-blur border-b border-fb-border/40">' +
             '<div class="flex flex-col md:flex-row md:items-end justify-between gap-4">' +
-            // The match-review chip is ambient tool-state (design §11): only
             // rendered when matches are waiting, silent otherwise. Populated +
             // shown by match-review.js (window.__fbMatchReviewChip), which
             // also owns the drawer the click opens.
@@ -3898,26 +3143,15 @@
             (providers.length > 1 ? '<select id="v3-songs-provider" class="' + ctrl + '">' + provOpts + '</select>' : '') +
             '<select id="v3-songs-artist" class="' + ctrl + ' max-w-[11rem]" aria-label="Artist">' + artistSelectHtml() + '</select>' +
             '<select id="v3-songs-album" class="' + ctrl + ' max-w-[11rem]" aria-label="Album"' + (state.artist ? '' : ' disabled') + '>' + albumSelectHtml() + '</select>' +
-            '<div class="flex rounded-md overflow-hidden border border-gray-700"><button id="v3-songs-grid-btn" class="px-3 py-2 text-sm">▦</button><button id="v3-songs-tree-btn" class="px-3 py-2 text-sm">≣</button><button id="v3-songs-albums-btn" title="Albums" class="px-3 py-2 text-sm">💿</button><button id="v3-songs-folder-btn" class="px-3 py-2 text-sm" style="display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:2.25rem"><svg fill="currentColor" viewBox="0 0 16 16" style="width:12px;height:12px;flex-shrink:0"><path d="M1 3.5A1.5 1.5 0 012.5 2h3.086a1.5 1.5 0 011.06.44l.915.914H13.5A1.5 1.5 0 0115 4.914V12.5a1.5 1.5 0 01-1.5 1.5h-11A1.5 1.5 0 011 12.5v-9z"/></svg></button></div>' +
-            // Name the perspective on the SORT too, not just the filter: tuning
-            // sort orders by musical distance from standard, and for a bass
-            // player that distance is measured on the bass tuning. Unlabelled,
-            // the grid silently reorders with no visible cause.
-            '<select id="v3-songs-sort" class="' + ctrl + '">' + opt(
-                SORTS.map(([v, l]) => [v, v === 'tuning' ? l + ' (' + libInstrumentLabel() + ')' : l]),
-                state.sort) + '</select>' +
             '<select id="v3-songs-format" class="' + ctrl + '">' + opt(FORMATS, state.format) + '</select>' +
             '<button id="v3-songs-filters" class="relative ' + ctrl + ' flex items-center gap-2">Filters<span id="v3-songs-filter-count" class="hidden bg-fb-primary text-white text-xs rounded-full px-1.5">0</span></button>' +
             '<button id="v3-songs-select" class="' + ctrl + (state.selectMode ? ' bg-fb-primary text-white' : '') + '">Select</button>' +
-            '<button id="v3-songs-refresh" title="Refresh library (scan for new songs)" class="' + ctrl + '">⟳ Refresh</button>' +
-            '<button id="v3-songs-refresh-meta" title="Refresh metadata for the songs shown (re-match titles, artwork &amp; more)" class="' + ctrl + '">🏷 Metadata</button>' +
             '<button id="v3-songs-unmatched" title="Show only songs with no metadata match" class="' + ctrl + ((state.filters.match || []).includes('unmatched') ? ' bg-fb-primary text-white' : '') + '">Unmatched</button>' +
             '<button id="v3-songs-upload" class="' + ctrl + '">Upload</button>' +
             '</div></div></div>' +
             // Practice-aware library home: a repertoire progress meter + a
             // "Keep practicing" shelf of started-but-not-mastered songs. Shown
             // only on the grid view when not searching/filtering/selecting
-            // (renderLibraryHome + updateLibraryHome). Empty/absent → collapses.
             '<div id="v3-lib-home" class="hidden mb-5"></div>' +
             // Windowed grid: the sizer reserves the full-library scroll height;
             // #v3-songs-grid is absolutely positioned inside it and holds only the
@@ -3927,13 +3161,11 @@
             '</div>' +
             '<div id="v3-songs-tree" class="hidden"></div>' +
             '<div id="v3-songs-albums" class="hidden"></div>' +
-            // Artist page host (PR-B) — an openAlbum-style in-place sub-render;
             // populated + shown by openArtistPage, cleared on close/reload.
             '<div id="v3-songs-artistpage" class="hidden"></div>' +
             '<div id="lib-folder-controls" style="display:none"></div>' +
             '<div id="lib-folder-tree" class="space-y-1 hidden"></div>' +
             '<div id="v3-songs-sentinel" class="h-8"></div>' +
-            // A–Z jump rail (grid + alphabetical sorts only; populated by
             // refreshRail). The bubble shows the current letter while dragging.
             '<nav id="v3-songs-azrail" class="v3-azrail hidden" aria-label="Jump to letter"></nav>' +
             '<div id="v3-songs-azbubble" class="v3-azbubble hidden" aria-hidden="true"></div>' +
@@ -3966,14 +3198,12 @@
         byId('v3-songs-filters').addEventListener('click', openDrawer);
         byId('v3-songs-overlay').addEventListener('click', closeDrawer);
         // Match-review chip: feature-detected (match-review.js owns the
-        // drawer + the count; absent → the chip just stays hidden).
         byId('v3-songs-match-review')?.addEventListener('click', () => { if (window.__fbOpenMatchReview) window.__fbOpenMatchReview(); });
         if (window.__fbMatchReviewChip) window.__fbMatchReviewChip();
         byId('v3-songs-upload').addEventListener('click', () => {
             const legacy = document.getElementById('upload-songs-file');
             // Upload targets the LOCAL library + scan; watchUploadScan refreshes
             // the grid for the local provider. Uploading while browsing a remote
-            // provider won't surface the new local songs — switching the grid to
             // local on upload is a P23 remote-provider follow-up.
             if (legacy) { legacy.click(); watchUploadScan(); }
         });
@@ -4008,7 +3238,6 @@
         // through to the per-card play handler and starts playback instead of
         // selecting ("checkbox click opens the song / access-denied"). The artist
         // page renders the same [data-fn] song rows into its own host, so it
-        // needs the guard too — otherwise a row click there plays instead of
         // toggling when select mode is already on.
         bindSelectGuard(byId('v3-songs-grid'));
         bindSelectGuard(byId('v3-songs-tree'));
@@ -4039,14 +3268,12 @@
     }
 
     async function onV3SongsScreenEnter() {
-        // A library scan / DLC-folder change marked the grid stale — re-fetch
         // from scratch instead of restoring a cached (possibly empty, pre-DLC)
         // snapshot. Must win over every fast-path below.
         if (_libraryDirty) { _libraryDirty = false; await reload(); return; }
         // Keep the entry-point gates current (a Settings visit may have
         // toggled artist pages / external links). Fire-and-forget.
         refreshArtistPageGates();
-        // An open artist sub-page survives a screen bounce as-is — its DOM is
         // self-contained. A torn-down/hidden host means the state is stale;
         // clear it and fall through to the normal restore paths.
         if (state.artistPage) {
@@ -4056,7 +3283,6 @@
             state.artistReturnScroll = null;
         }
         // Pull in any scores recorded while the library was off-screen (the usual
-        // play→return flow) before the fast-paths below restore the cached DOM,
         // so the just-played song's badge is current. The full render() path
         // re-fetches accuracy itself, so this is a no-op cost there.
         await applyScoreRefresh();
@@ -4090,11 +3316,9 @@
             }
         }
 
-        // Sidebar return without a player snapshot — keep grid, refresh chrome.
         if (!snap && domReady && chromeOk && state.built) {
             syncChromeFromState();
             // If state drifted while we were away (notably an off-screen topbar
-            // search updating state.q), the persisted grid is stale — refetch
             // instead of silently showing the old results. Unchanged state keeps
             // the scroll-preserving no-op.
             if (state.renderedHash !== _libraryStateHash()) { reload(); return; }
@@ -4123,11 +3347,9 @@
 
     // After an upload click-through (which reuses the legacy uploader +
     // background scan), poll /api/scan-status and reload the v3 grid once the
-    // scan we triggered finishes — the legacy uploader only refreshes the
     // legacy screens, so without this newly-uploaded songs wouldn't appear in
     // v3 until a manual refresh. Bounded so a no-op upload can't poll forever.
     let _uploadScanTimer = null;
-    // ── Library refresh (rescan) from the Songs toolbar ───────────────────────
     // The tester ask: a media-server-style "I dropped files in my folder, hit
     // refresh" button, with live progress. Reuses the SAME machinery the Settings
     // Rescan buttons drive (/api/rescan + /api/scan-status) and emits
@@ -4139,15 +3361,10 @@
         if (!btn) return;
         if (sd && sd.running) {
             // Determinate count only exists in the 'scanning' stage; 'listing' is
-            // indeterminate (total 0), so show a plain "Scanning…" then.
             const det = (sd.stage === 'scanning' && sd.total) ? ' ' + sd.done + '/' + sd.total : '';
-            btn.textContent = '⟳ Scanning' + det + '…';
             btn.disabled = true;
             btn.classList.add('opacity-70');
-            const pct = sd.total ? Math.round((sd.done / sd.total) * 100) + '% · ' : '';
-            btn.title = 'Scanning new/changed songs… ' + pct + (sd.current || '');
         } else {
-            btn.textContent = '⟳ Refresh';
             btn.disabled = false;
             btn.classList.remove('opacity-70');
             btn.title = 'Refresh library (scan for new songs)';
@@ -4166,9 +3383,7 @@
             const parts = [];
             if (added) parts.push(added + ' song' + (added === 1 ? '' : 's') + ' added');
             if (removed) parts.push(removed + ' removed');
-            msg = parts.join(' · ');
         } else msg = 'Your library is up to date';
-        try { window.fbNotify.show({ title: 'Library scan complete', message: msg, icon: '🔄', accent: '#22C55E' }); } catch (e) { /* */ }
     }
     // Poll scan-status until the scan finishes, driving the button state. On
     // completion, emit library:changed (grid reloads via the listener below) and,
@@ -4220,10 +3435,7 @@
         }, 1000);
     }
 
-    // ── Refresh Metadata (batch enrichment) from the Songs toolbar ─────────────
-    // The metadata counterpart to ⟳ Refresh (which scans FILES): matches
     // titles/artist/album/artwork against MusicBrainz for the songs that still
-    // need it — the ambient background matcher, run on demand (a media-server's
     // "Refresh Metadata" vs "Scan Files"). Mirrors the scan machinery: a 1 Hz
     // poll of /api/enrichment/status drives the button + batch bar, while
     // /api/enrichment/states drives per-tile badges on the visible window.
@@ -4239,7 +3451,6 @@
         if (um) um.style.display = local ? '' : 'none';
     }
 
-    // Quick "Show unmatched" — the same filter as the drawer's Match → Unmatched,
     // one click from the toolbar so the no-match pile is reachable right after a
     // batch. Toggles the button + re-queries the grid.
     function toggleUnmatchedFilter() {
@@ -4254,7 +3465,6 @@
 
     // The local filenames the grid is currently SHOWING (data-fn is the local
     // filename the enrichment cache keys on). The grid is windowed, so this is
-    // the visible slice only — exactly what the per-tile poll should cover.
     function _visibleLocalFilenames() {
         const grid = document.getElementById('v3-songs-grid');
         if (!grid) return [];
@@ -4263,7 +3473,6 @@
     }
 
     // Set/clear one card's live badge (recycled cards re-derive from _metaTile on
-    // the next paint, so update the map too — mirrors _patchCardFav).
     function _patchCardEnrich(fn, st) {
         if (st) _metaTile[fn] = st; else delete _metaTile[fn];
         const sel = (window.CSS && CSS.escape) ? CSS.escape(fn) : fn;
@@ -4279,7 +3488,6 @@
         Object.keys(_metaTile).forEach((fn) => { delete _metaTile[fn]; });
         document.querySelectorAll('.v3-meta-tile').forEach((el) => el.remove());
         // The persistent "No match" badge derives from _unmatched (not _metaTile),
-        // yet shares the .v3-meta-tile class — so the blanket remove above strips it.
         // Repaint the resting indicator on any rendered card so a metadata rescan's
         // tile-clear doesn't silently drop it until the next scroll/re-render.
         _unmatched.forEach((fn) => {
@@ -4305,19 +3513,15 @@
         if (running) {
             const total = (es && es.total) || 0, done = (es && es.matched) || 0;
             const cancelling = !!(es && es.cancelling);
-            btn.textContent = cancelling ? 'Stopping…' : ('⏹ Stop' + (total ? ' · ' + done + '/' + total : ''));
             btn.disabled = cancelling;
             btn.classList.toggle('opacity-70', cancelling);
-            btn.title = cancelling ? 'Stopping after the current song…' : 'Stop refreshing metadata';
             if (prog) {
                 prog.classList.remove('hidden'); prog.classList.add('flex');
-                if (label) label.textContent = total ? ('Matching metadata ' + done + '/' + total) : 'Matching metadata…';
                 // Real songs-processed ratio; a tiny sliver while the queue size
                 // is still being computed (phase 1) so the bar isn't dead-empty.
                 if (fill) fill.style.width = (total ? Math.round((done / total) * 100) : 6) + '%';
             }
         } else {
-            btn.textContent = '🏷 Metadata';
             btn.disabled = false;
             btn.classList.remove('opacity-70');
             btn.title = 'Refresh metadata for the songs shown (re-match titles, artwork & more)';
@@ -4325,7 +3529,6 @@
         }
     }
 
-    // Completion toast — reuse the shared fbNotify surface (visual-only, so
     // hearing-safe for free). Honest + never-punishing copy, in-game suppressed.
     function _metaCompleteToast(es) {
         const active = document.querySelector('.screen.active');
@@ -4335,7 +3538,6 @@
         const msg = matched
             ? (matched + ' song' + (matched === 1 ? '' : 's') + ' matched')
             : 'Your library metadata is up to date';
-        try { window.fbNotify.show({ title: 'Metadata refresh complete', message: msg, icon: '🏷️', accent: '#22C55E' }); } catch (e) { /* */ }
     }
 
     // Poll enrichment status (button + bar) AND the visible window's per-song
@@ -4375,7 +3577,6 @@
                     }
                 } catch (e) { /* */ }
             }
-            // Cap at 20 min (a ~1000-song trickle at ≤1/s is ~17 min); a
             // user-initiated no-op that never saw a running pass ends quickly.
             const noopDone = announce && !sawRunning && ticks >= 3;
             if ((sawRunning && es && !es.running) || noopDone || ticks >= 1200) {
@@ -4394,7 +3595,6 @@
     }
 
     // Force a fresh re-match of the songs currently SHOWN (the visible grid
-    // window) — a media-server-style per-view "Refresh Metadata". Resets those
     // songs and re-fetches, so it's visible even on an already-matched library.
     // Manual pins are skipped server-side; scoped to the visible set so it's
     // fast + can't blow the whole rate budget.
@@ -4410,7 +3610,6 @@
                 body: JSON.stringify({ filenames: fns }),
             });
             if (r.ok) queued = (await r.json()).queued || [];
-        } catch (e) { /* offline → nothing queued */ }
         // Badge exactly what the server queued (everything visible except your
         // manual pins). Nothing queued = all visible songs are pinned/unknown.
         queued.forEach((fn) => _patchCardEnrich(fn, 'queued'));
@@ -4473,141 +3672,7 @@
         },
     };
 
-    // ── Grid cursor navigation (arrow keys / gamepad d-pad) ─────────────────
-    // shortcuts.js's generic library arrow-nav (_handleLibArrowNav) can't reach
-    // this screen: it assumes every navigable item is already a DOM node, but
-    // this grid is windowed — most of the library isn't in the DOM at any given
-    // scroll position. Cursor state here is an absolute index into state.songs,
-    // and moving it may need to fetch a page and/or scroll the window before the
-    // target card exists to highlight or activate.
-    let _gpIdx = null;
-
-    function _gpCardEl(idx) {
-        return document.querySelector('#v3-songs-grid [data-idx="' + idx + '"]');
-    }
-
-    function _gpApplyHighlight() {
-        const prev = document.querySelector('#v3-songs-grid [data-gp-cursor]');
-        if (prev) {
-            prev.removeAttribute('data-gp-cursor');
-            prev.querySelector('[data-v3-play]')?.classList.remove('ring-2', 'ring-fb-primary');
-        }
-        if (_gpIdx == null) return;
-        const el = _gpCardEl(_gpIdx);
-        if (!el) return;
-        el.setAttribute('data-gp-cursor', '1');
-        el.querySelector('[data-v3-play]')?.classList.add('ring-2', 'ring-fb-primary');
-    }
-
-    async function _gpEnsureVisible(idx) {
-        const main = document.getElementById('v3-main'), sizer = _sizerEl();
-        if (!main || !sizer) return;
-        const { cols, rowH } = measureGeom();
-        const row = Math.floor(idx / Math.max(1, cols));
-        const sizerTop = _sizerTopInScroller(main, sizer);
-        const rowTop = sizerTop + row * rowH;
-        const rowBottom = rowTop + rowH;
-        const viewTop = main.scrollTop, viewBottom = viewTop + main.clientHeight;
-        if (rowTop < viewTop) main.scrollTop = rowTop;
-        else if (rowBottom > viewBottom) main.scrollTop = rowBottom - main.clientHeight;
-        await renderWindow();
-
-        // #v3-songs-toolbar is sticky, but only pins to the top once scrolled
-        // PAST its natural in-flow position — before that point it isn't
-        // covering anything, after it covers a fixed band. That makes its
-        // occlusion scroll-dependent in a way no single precomputed offset
-        // captures, so measure the real rendered overlap and correct for it,
-        // rather than assuming the toolbar's height is always "lost" space.
-        const toolbar = document.getElementById('v3-songs-toolbar');
-        const cardEl = _gpCardEl(idx);
-        if (toolbar && cardEl) {
-            const overlap = toolbar.getBoundingClientRect().bottom - cardEl.getBoundingClientRect().top;
-            if (overlap > 0) {
-                // Push the row DOWN the screen to clear the toolbar — that means
-                // scrolling the content back UP, i.e. decreasing scrollTop (screen
-                // position = content position - scrollTop).
-                main.scrollTop -= overlap;
-                await renderWindow();
-            }
-        }
-    }
-
-    async function _gpMove(delta) {
-        if (!state.total) return;
-        if (_gpIdx == null) {
-            // Nothing selected yet — land on the first card and stop, same as
-            // shortcuts.js's legacy _handleLibArrowNav does for an empty
-            // selection: the first press establishes a cursor, it doesn't also
-            // move it (Right/Down previously skipped straight past row 0).
-            _gpIdx = 0;
-        } else {
-            const next = Math.max(0, Math.min(state.total - 1, _gpIdx + delta));
-            if (next === _gpIdx) return;
-            _gpIdx = next;
-        }
-        await ensureWindow(Math.max(0, _gpIdx - 1), Math.min(state.total, _gpIdx + 2));
-        await _gpEnsureVisible(_gpIdx);
-        _gpApplyHighlight();
-    }
-
-    function _gpActivate() {
-        if (_gpIdx == null) return;
-        _gpCardEl(_gpIdx)?.querySelector('[data-v3-play]')?.click();
-    }
-
-    // Bails on focus inside anything with its own keyboard semantics — form
-    // controls, buttons, and dialog/drawer overlays — same intent as
-    // shortcuts.js's _isInsideInteractiveControl, reimplemented locally since
-    // this is a plain script (not an ES module) and can't import it.
-    //
-    // The form-control/button check requires the element to be VISIBLE, not
-    // merely present: screens stay in the DOM (hidden, not removed) when you
-    // navigate away, so a real <button> focused on some OTHER now-hidden
-    // screen (dashboard, etc.) can leave document.activeElement pointing at
-    // it — an el.closest('#v3-songs') scope check would let that stale focus
-    // through fine, but would ALSO wrongly stop blocking genuinely-focused
-    // shared chrome like the topbar search input (#v3-search lives outside
-    // #v3-songs's DOM subtree even while v3-songs is the active screen).
-    // Visibility is the actual distinction that matters here, not DOM
-    // nesting. The dialog/drawer-overlay and contentEditable checks stay as
-    // they were — overlay-level concerns regardless of which screen sits
-    // underneath.
-    function _gpBlockedTarget(el) {
-        if (!el) return false;
-        if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(el.tagName) && el.offsetParent !== null) return true;
-        if (el.isContentEditable) return true;
-        if (el.closest && el.closest('[role="dialog"], .feedBack-modal, #lib-filter-drawer')) return true;
-        return false;
-    }
-
-    document.addEventListener('keydown', (e) => {
-        if (!songsActive() || state.view !== 'grid') return;
-        if (_gpBlockedTarget(document.activeElement)) return;
-        const isActivate = e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar';
-        if (!isActivate && !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
-        e.preventDefault();
-        if (isActivate) { _gpActivate(); return; }
-        const { cols } = measureGeom();
-        if (e.key === 'ArrowRight') _gpMove(1);
-        else if (e.key === 'ArrowLeft') _gpMove(-1);
-        else if (e.key === 'ArrowDown') _gpMove(cols);
-        else if (e.key === 'ArrowUp') _gpMove(-cols);
-    });
-
     if (sm && typeof sm.on === 'function') {
-        sm.on('instrument:changed', function (e) {
-            var instId = e && e.detail && e.detail.instrument;
-            if (!instId || !_autoFilterEnabled) return;
-            // Record the new instrument so working-tuning-changed skips its
-            // reload path — this handler already handles the reload.
-            _lastRenderInstrument = libInstrument();
-            state.filters.tunings = [];
-            if (_applyArrangementAutoFilter(instId)) {
-                reload();
-                renderDrawerIfOpen();
-            }
-        });
-
         sm.on('screen:changed', (e) => {
             const id = e && e.detail && e.detail.id;
             if (id === 'v3-songs') { onV3SongsScreenEnter(); return; }
@@ -4622,12 +3687,10 @@
             }
         });
         // stats-recorder POSTs the score asynchronously and emits this once the
-        // server has the new best — that's the correct moment to refresh the
         // badge (song:stop fires before the POST resolves, so it's too early).
         // If the library is visible right now, repaint immediately; otherwise
         // mark it dirty and onV3SongsScreenEnter applies it on return.
         sm.on('stats:recorded', (e) => {
-            // Decode to the library-card key space — the event carries the
             // encodeURIComponent'd filename, but cards (data-fn) and
             // state.accuracy key on the decoded library filename. Without this
             // the repaint below (and applyScoreRefresh's repaintAccuracy) match
@@ -4643,7 +3706,6 @@
             if (active && active.id === 'v3-songs') applyScoreRefresh();
         });
         // A library scan (rescan / full rescan from Settings, or a DLC-folder
-        // change) can add or remove songs while this grid is cached — the
         // Settings rescan only refreshed the classic library, so the v3 grid
         // stayed on its pre-scan (e.g. empty, pre-DLC) state until an app
         // restart. Reload now if we're showing; otherwise mark dirty so the next
@@ -4653,27 +3715,9 @@
             if (active && active.id === 'v3-songs') { _libraryDirty = false; reload(); }
             else _libraryDirty = true;
         });
-        // Your live tuning changed (retune / instrument swap / reset) → re-colour the
         // visible tuning chips against the new tuning. Cheap: re-decorates in place,
         // no re-fetch or re-paint. No-op off the Songs grid or without the capability.
         sm.on('working-tuning-changed', () => {
-            // A guitar<->bass SWITCH changes which tuning the facet, the filter,
-            // the sort and the card chip speak for, so the grid must re-query —
-            // re-colouring chips would leave the guitar tuning on screen and a
-            // guitar-keyed filter applied. A retune within one instrument still
-            // takes the cheap in-place path below.
-            const inst = libInstrument();
-            if (inst !== _lastRenderInstrument) {
-                _lastRenderInstrument = inst;
-                // A tuning selection keyed to the old instrument means nothing
-                // for the new one; clearing avoids an empty grid the user can't
-                // explain (the pills are re-rendered from the new facet).
-                state.filters.tunings = [];
-                const active = document.querySelector('.screen.active');
-                if (active && active.id === 'v3-songs') reload();
-                else _libraryDirty = true;
-                return;
-            }
             if (typeof songsActive === 'function' && !songsActive()) return;
             if (state.view !== 'grid') return;
             decorateTuningChips(_gridEl());
