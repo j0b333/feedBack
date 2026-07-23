@@ -87,8 +87,17 @@
                     '<div class="flex flex-wrap gap-1">';
                 for (var j = 0; j < inst.roles.length; j++) {
                     var role = inst.roles[j];
+                    var typeTag = '';
+                    if (role.arrangement_types && role.arrangement_types.length) {
+                        typeTag = ' <span class="text-fb-textDim text-[0.5625rem]">(';
+                        for (var ti = 0; ti < role.arrangement_types.length; ti++) {
+                            if (ti > 0) typeTag += ', ';
+                            typeTag += esc(role.arrangement_types[ti]);
+                        }
+                        typeTag += ')</span>';
+                    }
                     html += '<span class="text-xs bg-gray-800/50 border border-gray-700 rounded-md px-2 py-0.5 text-fb-text">' +
-                        esc(role.label) + (role.default ? ' <span class="text-fb-primary text-[0.625rem]">(default)</span>' : '') +
+                        esc(role.label) + (role.default ? ' <span class="text-fb-primary text-[0.625rem]">(default)</span>' : '') + typeTag +
                         '</span>';
                 }
                 html += '</div></div>';
